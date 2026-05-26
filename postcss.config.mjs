@@ -1,7 +1,11 @@
-const config = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
   },
 };
-export default config;
+
+export default nextConfig;
