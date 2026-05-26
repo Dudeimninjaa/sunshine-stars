@@ -73,6 +73,7 @@ export default function HomePage() {
   const [newStudentAvatar, setNewStudentAvatar] = useState("🥷");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryEmoji, setNewCategoryEmoji] = useState("⭐");
+  const [newCategoryPoints, setNewCategoryPoints] = useState(1);
 
   const selectedStudent = useMemo(() => students.find((s) => s.id === selectedStudentId), [students, selectedStudentId]);
   const activeClassroom = useMemo(() => classrooms.find((c) => c.id === classroomId), [classrooms, classroomId]);
@@ -224,7 +225,7 @@ export default function HomePage() {
     if (!classroomId || !newCategoryName.trim()) return;
     const { error } = await supabase.from("categories").insert({ classroom_id: classroomId, name: newCategoryName.trim(), emoji: newCategoryEmoji, points: 1 });
     if (error) return setMessage(error.message);
-    setNewCategoryName(""); await loadClassroomData(classroomId);
+    setNewCategoryName(""); setNewCategoryPoints(1); await loadClassroomData(classroomId);
   }
 
   async function removeCategory(id: string) {
@@ -233,19 +234,54 @@ export default function HomePage() {
     await loadClassroomData(classroomId);
   }
 
+  async function updateCategoryPoints(id: string, points: number) {
+    const { error } = await supabase.from("categories").update({ points }).eq("id", id);
+    if (error) return setMessage(error.message);
+    await loadClassroomData(classroomId);
+  }
+
+  async function quickTakeAwayPoint() {
+    if (!selectedStudent || !goal || !sessionUserId) {
+      setMessage("Select a student first.");
+      return;
+    }
+
+    const newStudentTotal = Math.max(0, selectedStudent.total_points - 1);
+    const newGoalTotal = Math.max(0, goal.current_points - 1);
+
+    await supabase.from("rewards").insert({
+      classroom_id: classroomId,
+      student_id: selectedStudent.id,
+      teacher_id: sessionUserId,
+      category_id: null,
+      category_name: "Point Removed",
+      points: -1,
+    });
+
+    await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
+    await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
+
+    setPopStudentId(selectedStudent.id);
+    setMessage(`Removed 1 point from ${selectedStudent.name}.`);
+    setTimeout(() => setPopStudentId(""), 950);
+    await loadClassroomData(classroomId);
+  }
+
   async function giveReward(category: Category) {
     if (!selectedStudent || !goal || !sessionUserId) return;
-    const newStudentTotal = selectedStudent.total_points + category.points;
-    const newGoalTotal = goal.current_points + category.points;
+    const newStudentTotal = Math.max(0, selectedStudent.total_points + category.points);
+    const newGoalTotal = Math.max(0, goal.current_points + category.points);
     await supabase.from("rewards").insert({ classroom_id: classroomId, student_id: selectedStudent.id, teacher_id: sessionUserId, category_id: category.id, category_name: category.name, points: category.points });
     await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
     setPopStudentId(selectedStudent.id);
-    setMessage(`${selectedStudent.name} earned a star for ${category.name}!`);
-    launchSparkles();
-    playTone("star");
+    setMessage(category.points >= 0 ? `${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
+    if (category.points > 0) {
+      launchSparkles();
+      playTone("star");
+    }
     const level = activeClassroom?.animation_level || "high";
-    if (newGoalTotal >= goal.target_points) {
+    if (category.points > 0 && newGoalTotal >= goal.target_points) {
       setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
       playTone("goal");
       confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
@@ -343,9 +379,9 @@ export default function HomePage() {
           )}
 
           {mode === "board" ? (
-            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} giveReward={giveReward} theme={theme} kioskMode={kioskMode} />
+            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
-            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} addCategory={addCategory} removeCategory={removeCategory} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playTone("test")} />
+            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playTone("test")} />
           ) : (
             <ReportsMode students={students} rewards={rewards} />
           )}
@@ -369,7 +405,7 @@ export default function HomePage() {
   );
 }
 
-function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, giveReward, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; giveReward: (category: Category) => void; theme: any; kioskMode: boolean; }) {
+function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, giveReward, quickTakeAwayPoint, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; theme: any; kioskMode: boolean; }) {
   return (
     <div>
       {kioskMode && <div className="text-center mb-4"><div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div><p className="text-xl text-slate-600">Tap a student, then tap a reward.</p></div>}
@@ -392,10 +428,22 @@ function BoardMode({ students, categories, selectedStudentId, setSelectedStudent
       <div className={`rounded-[2rem] ${theme.soft} p-5`}>
         <h2 className={`text-3xl md:text-4xl font-black mb-4 ${theme.accentText}`}>Tap a reward category</h2>
         {!selectedStudentId && <p className="mb-4 text-lg font-bold text-slate-600">Select a student first.</p>}
+        {selectedStudentId && (
+          <button
+            onClick={quickTakeAwayPoint}
+            className="mb-4 rounded-[1.5rem] bg-red-100 text-red-700 border-2 border-red-200 px-6 py-4 text-2xl font-black shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"
+          >
+            −1 Take Away Point
+          </button>
+        )}
         <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "xl:grid-cols-5" : ""} gap-3`}>
           {categories.map((category) => (
-            <button key={category.id} disabled={!selectedStudentId} onClick={() => giveReward(category)} className={`${kioskMode ? "min-h-36 text-3xl" : "text-2xl"} rounded-[1.5rem] bg-white p-5 font-black shadow-lg hover:scale-[1.04] active:scale-95 disabled:opacity-40 transition-all touch-button`}>
-              <span className={`${kioskMode ? "text-6xl" : "text-4xl"} block mb-2`}>{category.emoji}</span>{category.name}
+            <button key={category.id} disabled={!selectedStudentId} onClick={() => giveReward(category)} className={`${kioskMode ? "min-h-36 text-3xl" : "text-2xl"} rounded-[1.5rem] ${category.points < 0 ? "bg-red-50 text-red-700 border-2 border-red-200" : "bg-white"} p-5 font-black shadow-lg hover:scale-[1.04] active:scale-95 disabled:opacity-40 transition-all touch-button`}>
+              <span className={`${kioskMode ? "text-6xl" : "text-4xl"} block mb-2`}>{category.emoji}</span>
+              <span className="block">{category.name}</span>
+              <span className={`mt-2 inline-block rounded-full px-3 py-1 text-base ${category.points < 0 ? "bg-red-200 text-red-900" : "bg-yellow-100 text-orange-700"}`}>
+                {category.points > 0 ? `+${category.points}` : category.points} pts
+              </span>
             </button>
           ))}
         </div>
@@ -491,14 +539,14 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
       </div>
       <div className="grid xl:grid-cols-2 gap-5">
         <section className="rounded-[2rem] bg-white p-5 shadow"><h2 className="text-3xl font-black mb-4">Weekly Student Points</h2><div className="space-y-2">{studentTotals.map((student) => <div key={student.name} className="flex items-center justify-between rounded-2xl bg-slate-50 p-4"><div className="text-xl font-black"><span className="text-3xl mr-2">{student.avatar}</span>{student.name}</div><div className="text-2xl font-black text-orange-500">{student.points}</div></div>)}</div></section>
-        <section className="rounded-[2rem] bg-white p-5 shadow"><h2 className="text-3xl font-black mb-4">Recent Rewards</h2><div className="space-y-2 max-h-96 overflow-auto">{rewards.slice(0, 20).map((reward) => { const student = students.find((s) => s.id === reward.student_id); return <div key={reward.id} className="rounded-2xl bg-slate-50 p-4 border-l-8" style={{ borderLeftColor: getCategoryColor(reward.category_name) }}><div className="font-black text-lg">{student?.avatar} {student?.name || "Student"} earned {reward.points} point</div><div className="text-slate-600">{reward.category_name}</div><div className="text-xs text-slate-400">{new Date(reward.created_at).toLocaleString()}</div></div>; })}</div></section>
+        <section className="rounded-[2rem] bg-white p-5 shadow"><h2 className="text-3xl font-black mb-4">Recent Rewards</h2><div className="space-y-2 max-h-96 overflow-auto">{rewards.slice(0, 20).map((reward) => { const student = students.find((s) => s.id === reward.student_id); return <div key={reward.id} className="rounded-2xl bg-slate-50 p-4 border-l-8" style={{ borderLeftColor: getCategoryColor(reward.category_name) }}><div className="font-black text-lg">{student?.avatar} {student?.name || "Student"} {reward.points >= 0 ? "earned" : "lost"} {Math.abs(reward.points)} point</div><div className="text-slate-600">{reward.category_name}</div><div className="text-xs text-slate-400">{new Date(reward.created_at).toLocaleString()}</div></div>; })}</div></section>
       </div>
     </div>
   );
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; addCategory: () => void; removeCategory: (id: string) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
@@ -510,8 +558,32 @@ function SetupMode(props: {
       </section>
       <section className="rounded-[2rem] bg-green-50 p-5">
         <h2 className="text-3xl font-black text-green-700 mb-4">Categories</h2>
-        <div className="flex gap-2 mb-3"><input className="flex-1 rounded-2xl border p-3" placeholder="Category name" value={props.newCategoryName} onChange={(e) => props.setNewCategoryName(e.target.value)} /><input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newCategoryEmoji} onChange={(e) => props.setNewCategoryEmoji(e.target.value)} /><button onClick={props.addCategory} className="rounded-2xl bg-green-500 text-white px-4 font-bold touch-button"><Plus /></button></div>
-        <div className="space-y-2 mb-6">{props.categories.map((c) => <div key={c.id} className="flex items-center justify-between bg-white rounded-2xl p-3"><div className="font-bold text-xl"><span className="text-3xl mr-2">{c.emoji}</span>{c.name}</div><button onClick={() => props.removeCategory(c.id)} className="text-red-500 touch-button"><Trash2 /></button></div>)}</div>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <input className="flex-1 min-w-48 rounded-2xl border p-3" placeholder="Category name" value={props.newCategoryName} onChange={(e) => props.setNewCategoryName(e.target.value)} />
+          <input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newCategoryEmoji} onChange={(e) => props.setNewCategoryEmoji(e.target.value)} />
+          <input type="number" className="w-28 rounded-2xl border p-3 text-center font-bold" value={props.newCategoryPoints} onChange={(e) => props.setNewCategoryPoints(Number(e.target.value))} />
+          <button onClick={props.addCategory} className="rounded-2xl bg-green-500 text-white px-4 font-bold touch-button"><Plus /></button>
+        </div>
+        <p className="mb-3 text-sm text-slate-600">Use positive numbers for rewards, or negative numbers for point deductions.</p>
+        <div className="space-y-2 mb-6">
+          {props.categories.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl p-3">
+              <div className="font-bold text-xl">
+                <span className="text-3xl mr-2">{c.emoji}</span>{c.name}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-bold text-slate-500">Points</label>
+                <input
+                  type="number"
+                  className={`w-24 rounded-xl border p-2 text-center font-black ${c.points < 0 ? "text-red-600" : "text-orange-600"}`}
+                  value={c.points}
+                  onChange={(e) => props.updateCategoryPoints(c.id, Number(e.target.value))}
+                />
+                <button onClick={() => props.removeCategory(c.id)} className="text-red-500 touch-button"><Trash2 /></button>
+              </div>
+            </div>
+          ))}
+        </div>
         <div className="rounded-[2rem] bg-white p-4 shadow">
           <h3 className="text-2xl font-black mb-3">Board Settings</h3>
           <label className="block font-bold mb-1">Theme</label>
