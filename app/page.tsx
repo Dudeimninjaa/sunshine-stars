@@ -63,6 +63,7 @@ export default function HomePage() {
   const [mode, setMode] = useState<"board" | "setup" | "reports">("board");
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [popStudentId, setPopStudentId] = useState<string>("");
+  const [negativePopStudentId, setNegativePopStudentId] = useState<string>("");
   const [sparkles, setSparkles] = useState<{ id: number; x: number; y: number; emoji: string }[]>([]);
   const [celebration, setCelebration] = useState("");
   const [message, setMessage] = useState("");
@@ -261,7 +262,7 @@ export default function HomePage() {
     await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
 
-    setPopStudentId(selectedStudent.id);
+    setNegativePopStudentId(selectedStudent.id);
     setMessage(`Removed 1 point from ${selectedStudent.name}.`);
     setTimeout(() => setPopStudentId(""), 950);
     await loadClassroomData(classroomId);
@@ -379,7 +380,7 @@ export default function HomePage() {
           )}
 
           {mode === "board" ? (
-            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} theme={theme} kioskMode={kioskMode} />
+            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
             <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playTone("test")} />
           ) : (
@@ -405,7 +406,7 @@ export default function HomePage() {
   );
 }
 
-function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, giveReward, quickTakeAwayPoint, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; theme: any; kioskMode: boolean; }) {
+function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, negativePopStudentId, giveReward, quickTakeAwayPoint, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; negativePopStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; theme: any; kioskMode: boolean; }) {
   return (
     <div>
       {kioskMode && <div className="text-center mb-4"><div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div><p className="text-xl text-slate-600">Tap a student, then tap a reward.</p></div>}
@@ -416,6 +417,14 @@ function BoardMode({ students, categories, selectedStudentId, setSelectedStudent
               <div className="absolute inset-x-0 top-8 animate-floatUp pointer-events-none">
                 <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-yellow-300 px-6 py-3 text-5xl md:text-7xl font-black text-orange-700 shadow-2xl border-4 border-white">
                   ⭐ +1
+                </div>
+              </div>
+            )}
+
+            {negativePopStudentId === student.id && (
+              <div className="absolute inset-x-0 top-8 animate-floatUp pointer-events-none">
+                <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 text-5xl md:text-7xl font-black text-white shadow-2xl border-4 border-white">
+                  💥 -1
                 </div>
               </div>
             )}
