@@ -264,7 +264,7 @@ export default function HomePage() {
 
     setNegativePopStudentId(selectedStudent.id);
     setMessage(`Removed 1 point from ${selectedStudent.name}.`);
-    setTimeout(() => setPopStudentId(""), 950);
+    setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
     await loadClassroomData(classroomId);
   }
 
@@ -275,7 +275,11 @@ export default function HomePage() {
     await supabase.from("rewards").insert({ classroom_id: classroomId, student_id: selectedStudent.id, teacher_id: sessionUserId, category_id: category.id, category_name: category.name, points: category.points });
     await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
-    setPopStudentId(selectedStudent.id);
+    if (category.points < 0) {
+      setNegativePopStudentId(selectedStudent.id);
+    } else {
+      setPopStudentId(selectedStudent.id);
+    }
     setMessage(category.points >= 0 ? `${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
     if (category.points > 0) {
       launchSparkles();
@@ -295,7 +299,7 @@ export default function HomePage() {
     } else if (level !== "low") {
       confetti({ particleCount: 55, spread: 70, origin: { y: 0.7 } });
     }
-    setTimeout(() => setPopStudentId(""), 950);
+    setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
     await loadClassroomData(classroomId);
   }
 

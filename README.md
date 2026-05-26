@@ -9,3 +9,6 @@ This version adds:
 - Student totals and class goal progress do not go below 0
 
 No new Supabase SQL required because the categories.points field already exists.
+
+
+Update: negative point categories are now automatically detected and use the red negative animation.
