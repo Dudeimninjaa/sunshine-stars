@@ -1,14 +1,18 @@
-# Sunshine Stars — Point Values and Negative Points
+# Sunshine Stars — Teams and Class Captains
 
-This version adds:
+Adds:
+- Student teams/groups
+- Team creation with emoji and color
+- Assign students to teams
+- Team scoreboard
+- Team reward mode
+- Class Captain Picker
+- Picks 2 captains
+- No-repeat captain mode
+- Captain history saved in Supabase
 
-- Editable point values for each reward category
-- Negative-point categories
-- Quick minus 1 Take Away Point button in Board Mode
-- Category buttons show positive or negative point value
-- Student totals and class goal progress do not go below 0
+## Important Supabase step
 
-No new Supabase SQL required because the categories.points field already exists.
+Run the updated `supabase/schema.sql` in Supabase SQL Editor.
 
-
-Update: negative point categories are now automatically detected and use the red negative animation.
+This adds the `teams` table, `students.team_id`, and `captain_history` table.

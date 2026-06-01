@@ -166,3 +166,36 @@ for all using (public.is_classroom_member(classroom_id)) with check (public.is_c
 drop policy if exists "Members manage rewards" on public.rewards;
 create policy "Members manage rewards" on public.rewards
 for all using (public.is_classroom_member(classroom_id)) with check (public.is_classroom_member(classroom_id));
+
+
+-- Step: Student teams and class captain picker
+create table if not exists public.teams (
+  id uuid primary key default uuid_generate_v4(),
+  classroom_id uuid references public.classrooms(id) on delete cascade not null,
+  name text not null,
+  emoji text default '⭐',
+  color text default '#f97316',
+  created_at timestamptz default now()
+);
+
+alter table public.students
+add column if not exists team_id uuid references public.teams(id) on delete set null;
+
+create table if not exists public.captain_history (
+  id uuid primary key default uuid_generate_v4(),
+  classroom_id uuid references public.classrooms(id) on delete cascade not null,
+  student_id uuid references public.students(id) on delete cascade not null,
+  selected_date date default current_date,
+  created_at timestamptz default now()
+);
+
+alter table public.teams enable row level security;
+alter table public.captain_history enable row level security;
+
+drop policy if exists "Members manage teams" on public.teams;
+create policy "Members manage teams" on public.teams
+for all using (public.is_classroom_member(classroom_id)) with check (public.is_classroom_member(classroom_id));
+
+drop policy if exists "Members manage captain history" on public.captain_history;
+create policy "Members manage captain history" on public.captain_history
+for all using (public.is_classroom_member(classroom_id)) with check (public.is_classroom_member(classroom_id));

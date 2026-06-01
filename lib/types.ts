@@ -13,9 +13,27 @@ export type Classroom = {
 export type Student = {
   id: string;
   classroom_id: string;
+  team_id: string | null;
   name: string;
   avatar: string;
   total_points: number;
+  created_at: string;
+};
+
+export type Team = {
+  id: string;
+  classroom_id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  created_at: string;
+};
+
+export type CaptainHistory = {
+  id: string;
+  classroom_id: string;
+  student_id: string;
+  selected_date: string;
   created_at: string;
 };
 

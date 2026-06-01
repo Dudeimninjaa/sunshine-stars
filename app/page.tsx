@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
-import { Plus, Trash2, Settings, MonitorPlay, Users, Star, LogOut, Copy, UserPlus, Volume2, VolumeX, Maximize, Minimize, BarChart3, Activity } from "lucide-react";
+import { Plus, Trash2, Settings, MonitorPlay, Users, Star, LogOut, Copy, UserPlus, Volume2, VolumeX, Maximize, Minimize, BarChart3, Activity, Trophy, Crown, Shuffle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "@/lib/supabase";
-import type { Category, ClassGoal, Classroom, Student } from "@/lib/types";
+import type { Category, ClassGoal, Classroom, Student, Team, CaptainHistory } from "@/lib/types";
 
 type RewardLog = {
   id: string;
@@ -59,6 +59,8 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [goal, setGoal] = useState<ClassGoal | null>(null);
   const [rewards, setRewards] = useState<RewardLog[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [captainHistory, setCaptainHistory] = useState<CaptainHistory[]>([]);
 
   const [mode, setMode] = useState<"board" | "setup" | "reports">("board");
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
@@ -66,12 +68,18 @@ export default function HomePage() {
   const [negativePopStudentId, setNegativePopStudentId] = useState<string>("");
   const [sparkles, setSparkles] = useState<{ id: number; x: number; y: number; emoji: string }[]>([]);
   const [celebration, setCelebration] = useState("");
+  const [captainReveal, setCaptainReveal] = useState<Student[]>([]);
+  const [todaysCaptainIds, setTodaysCaptainIds] = useState<string[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [message, setMessage] = useState("");
 
   const [newClassName, setNewClassName] = useState("Sunshine Class");
   const [joinCode, setJoinCode] = useState("");
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentAvatar, setNewStudentAvatar] = useState("🥷");
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamEmoji, setNewTeamEmoji] = useState("🔴");
+  const [newTeamColor, setNewTeamColor] = useState("#ef4444");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryEmoji, setNewCategoryEmoji] = useState("⭐");
   const [newCategoryPoints, setNewCategoryPoints] = useState(1);
@@ -192,20 +200,28 @@ export default function HomePage() {
   }
 
   async function loadClassroomData(id: string) {
-    const [studentsRes, categoriesRes, goalsRes, rewardsRes] = await Promise.all([
+    const [studentsRes, categoriesRes, goalsRes, rewardsRes, teamsRes, captainsRes] = await Promise.all([
       supabase.from("students").select("*").eq("classroom_id", id).order("created_at", { ascending: true }),
       supabase.from("categories").select("*").eq("classroom_id", id).order("created_at", { ascending: true }),
       supabase.from("class_goals").select("*").eq("classroom_id", id).limit(1).maybeSingle(),
       supabase.from("rewards").select("*").eq("classroom_id", id).order("created_at", { ascending: false }).limit(500),
+      supabase.from("teams").select("*").eq("classroom_id", id).order("created_at", { ascending: true }),
+      supabase.from("captain_history").select("*").eq("classroom_id", id).order("created_at", { ascending: false }).limit(500),
     ]);
     if (studentsRes.error) setMessage(studentsRes.error.message);
     if (categoriesRes.error) setMessage(categoriesRes.error.message);
     if (goalsRes.error) setMessage(goalsRes.error.message);
     if (rewardsRes.error) setMessage(rewardsRes.error.message);
+    if (teamsRes.error) setMessage(teamsRes.error.message);
+    if (captainsRes.error) setMessage(captainsRes.error.message);
     setStudents(studentsRes.data ?? []);
     setCategories(categoriesRes.data ?? []);
     setGoal(goalsRes.data ?? null);
     setRewards((rewardsRes.data ?? []) as RewardLog[]);
+    setTeams((teamsRes.data ?? []) as Team[]);
+    setCaptainHistory((captainsRes.data ?? []) as CaptainHistory[]);
+    const today = new Date().toISOString().slice(0, 10);
+    setTodaysCaptainIds(((captainsRes.data ?? []) as CaptainHistory[]).filter((c) => c.selected_date === today).map((c) => c.student_id));
   }
 
   async function addStudent() {
@@ -265,6 +281,61 @@ export default function HomePage() {
     setNegativePopStudentId(selectedStudent.id);
     setMessage(`Removed 1 point from ${selectedStudent.name}.`);
     setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
+    await loadClassroomData(classroomId);
+  }
+
+  async function addTeam() {
+    if (!classroomId || !newTeamName.trim()) return;
+    const { error } = await supabase.from("teams").insert({ classroom_id: classroomId, name: newTeamName.trim(), emoji: newTeamEmoji, color: newTeamColor });
+    if (error) return setMessage(error.message);
+    setNewTeamName("");
+    await loadClassroomData(classroomId);
+  }
+
+  async function removeTeam(id: string) {
+    const { error } = await supabase.from("teams").delete().eq("id", id);
+    if (error) return setMessage(error.message);
+    await loadClassroomData(classroomId);
+  }
+
+  async function assignStudentTeam(studentId: string, teamId: string) {
+    const { error } = await supabase.from("students").update({ team_id: teamId || null }).eq("id", studentId);
+    if (error) return setMessage(error.message);
+    await loadClassroomData(classroomId);
+  }
+
+  async function giveTeamReward(category: Category) {
+    if (!selectedTeamId) return setMessage("Select a team first.");
+    const teamStudents = students.filter((student) => student.team_id === selectedTeamId);
+    if (!teamStudents.length) return setMessage("That team has no students yet.");
+    for (const student of teamStudents) {
+      await supabase.from("rewards").insert({ classroom_id: classroomId, student_id: student.id, teacher_id: sessionUserId, category_id: category.id, category_name: `Team: ${category.name}`, points: category.points });
+      await supabase.from("students").update({ total_points: Math.max(0, student.total_points + category.points) }).eq("id", student.id);
+    }
+    if (goal) {
+      await supabase.from("class_goals").update({ current_points: Math.max(0, goal.current_points + category.points * teamStudents.length) }).eq("id", goal.id);
+    }
+    const team = teams.find((item) => item.id === selectedTeamId);
+    setCelebration(`${team?.emoji || "👥"} ${team?.name || "Team"} ${category.points >= 0 ? "+" : ""}${category.points} each!`);
+    if (category.points > 0) { launchSparkles(); playTone("goal"); confetti({ particleCount: 160, spread: 110, origin: { y: 0.6 } }); }
+    setTimeout(() => setCelebration(""), 2200);
+    await loadClassroomData(classroomId);
+  }
+
+  async function pickClassCaptains() {
+    if (students.length < 2) return setMessage("Add at least 2 students first.");
+    const chosenBefore = new Set(captainHistory.map((item) => item.student_id));
+    let pool = students.filter((student) => !chosenBefore.has(student.id));
+    if (pool.length < 2) pool = [...students];
+    const picked = [...pool].sort(() => Math.random() - 0.5).slice(0, 2);
+    const today = new Date().toISOString().slice(0, 10);
+    await supabase.from("captain_history").insert(picked.map((student) => ({ classroom_id: classroomId, student_id: student.id, selected_date: today })));
+    setCaptainReveal(picked);
+    setTodaysCaptainIds(picked.map((student) => student.id));
+    setCelebration("👑 Today's Captains!");
+    playTone("goal");
+    confetti({ particleCount: 220, spread: 120, origin: { y: 0.6 } });
+    setTimeout(() => setCelebration(""), 2200);
     await loadClassroomData(classroomId);
   }
 
@@ -345,6 +416,22 @@ export default function HomePage() {
           </div>
         </div>
       )}
+      {captainReveal.length > 0 && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-6">
+          <div className="animate-bannerPop rounded-[2rem] bg-white p-8 text-center shadow-2xl border-4 border-yellow-300 max-w-2xl w-full">
+            <div className="text-5xl font-black text-yellow-600 mb-4">👑 Today's Class Captains 👑</div>
+            <div className="grid grid-cols-2 gap-4">
+              {captainReveal.map((student) => (
+                <div key={student.id} className="rounded-[2rem] bg-yellow-50 p-6 border-4 border-yellow-300">
+                  <div className="text-7xl">{student.avatar}</div>
+                  <div className="text-4xl font-black">{student.name}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setCaptainReveal([])} className="mt-6 rounded-2xl bg-yellow-400 px-8 py-4 text-xl font-black text-orange-950">Done</button>
+          </div>
+        </div>
+      )}
       {!kioskMode && (
         <header className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div><h1 className="text-4xl md:text-6xl font-black text-white drop-shadow-lg">{theme.emoji} Sunshine Stars</h1><p className="text-white/80 text-lg">Interactive board mode for teachers</p></div>
@@ -384,9 +471,9 @@ export default function HomePage() {
           )}
 
           {mode === "board" ? (
-            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} theme={theme} kioskMode={kioskMode} />
+            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
-            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playTone("test")} />
+            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playTone("test")} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
             <ReportsMode students={students} rewards={rewards} />
           )}
@@ -410,7 +497,7 @@ export default function HomePage() {
   );
 }
 
-function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, negativePopStudentId, giveReward, quickTakeAwayPoint, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; negativePopStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; theme: any; kioskMode: boolean; }) {
+function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, negativePopStudentId, giveReward, quickTakeAwayPoint, teams, selectedTeamId, setSelectedTeamId, giveTeamReward, pickClassCaptains, todaysCaptainIds, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; negativePopStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; teams: Team[]; selectedTeamId: string; setSelectedTeamId: (id: string) => void; giveTeamReward: (category: Category) => void; pickClassCaptains: () => void; todaysCaptainIds: string[]; theme: any; kioskMode: boolean; }) {
   return (
     <div>
       {kioskMode && <div className="text-center mb-4"><div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div><p className="text-xl text-slate-600">Tap a student, then tap a reward.</p></div>}
@@ -433,11 +520,30 @@ function BoardMode({ students, categories, selectedStudentId, setSelectedStudent
               </div>
             )}
             <div className={`${kioskMode ? "text-8xl" : "text-6xl"} mb-2`}>{student.avatar}</div>
-            <div className={`${kioskMode ? "text-4xl" : "text-3xl"} font-black text-slate-800`}>{student.name}</div>
+            <div className={`${kioskMode ? "text-4xl" : "text-3xl"} font-black text-slate-800`}>{todaysCaptainIds.includes(student.id) ? "👑 " : ""}{student.name}</div>
+            {student.team_id && <div className="mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-black text-white" style={{ backgroundColor: teams.find((team) => team.id === student.team_id)?.color || "#64748b" }}>{teams.find((team) => team.id === student.team_id)?.emoji} {teams.find((team) => team.id === student.team_id)?.name}</div>}
             <div className={`${kioskMode ? "text-3xl" : "text-2xl"} font-bold text-orange-500 mt-2`}><Star className="inline" /> {student.total_points}</div>
           </button>
         ))}
       </div>
+      <div className="grid xl:grid-cols-2 gap-4 mb-6">
+        <div className="rounded-[2rem] bg-white p-5 shadow">
+          <h2 className="text-3xl font-black mb-4 flex items-center gap-2"><Trophy /> Team Standings</h2>
+          <div className="space-y-2">
+            {teams.map((team) => { const total = students.filter((student) => student.team_id === team.id).reduce((sum, student) => sum + student.total_points, 0); return (
+              <button key={team.id} onClick={() => setSelectedTeamId(team.id)} className={`w-full rounded-2xl p-3 text-left font-black shadow flex justify-between items-center ${selectedTeamId === team.id ? "ring-4 ring-yellow-300" : ""}`} style={{ borderLeft: `12px solid ${team.color}` }}>
+                <span>{team.emoji} {team.name}</span><span>{total} pts</span>
+              </button> ); })}
+            {!teams.length && <p className="text-slate-500">Create teams in Setup.</p>}
+          </div>
+        </div>
+        <div className="rounded-[2rem] bg-yellow-50 p-5 shadow border border-yellow-100">
+          <h2 className="text-3xl font-black mb-4 flex items-center gap-2 text-yellow-700"><Crown /> Class Captains</h2>
+          <button onClick={pickClassCaptains} className="w-full rounded-2xl bg-yellow-400 p-5 text-2xl font-black text-orange-950 shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"><Shuffle className="inline mr-2" /> Pick 2 Captains</button>
+          <p className="text-sm text-slate-600 mt-3">No-repeat mode is on. The app avoids students who were picked recently until everyone has had a turn.</p>
+        </div>
+      </div>
+
       <div className={`rounded-[2rem] ${theme.soft} p-5`}>
         <h2 className={`text-3xl md:text-4xl font-black mb-4 ${theme.accentText}`}>Tap a reward category</h2>
         {!selectedStudentId && <p className="mb-4 text-lg font-bold text-slate-600">Select a student first.</p>}
@@ -460,6 +566,17 @@ function BoardMode({ students, categories, selectedStudentId, setSelectedStudent
             </button>
           ))}
         </div>
+        {selectedTeamId && (
+          <div className="mt-5 rounded-2xl bg-white p-4 shadow">
+            <h3 className="text-xl font-black mb-3">Team Reward Mode</h3>
+            <p className="text-slate-600 mb-3">Selected team: <b>{teams.find((team) => team.id === selectedTeamId)?.emoji} {teams.find((team) => team.id === selectedTeamId)?.name}</b></p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {categories.map((category) => (
+                <button key={`team-${category.id}`} onClick={() => giveTeamReward(category)} className={`rounded-2xl p-3 font-black ${category.points < 0 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-orange-700"}`}>Team {category.points > 0 ? "+" : ""}{category.points}: {category.name}</button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -559,7 +676,7 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
@@ -567,9 +684,12 @@ function SetupMode(props: {
         <h2 className="text-3xl font-black text-blue-700 mb-4 flex gap-2 items-center"><Users /> Students</h2>
         <div className="flex gap-2 mb-3"><input className="flex-1 rounded-2xl border p-3" placeholder="Student name" value={props.newStudentName} onChange={(e) => props.setNewStudentName(e.target.value)} /><input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newStudentAvatar} onChange={(e) => props.setNewStudentAvatar(e.target.value)} /><button onClick={props.addStudent} className="rounded-2xl bg-blue-500 text-white px-4 font-bold touch-button"><Plus /></button></div>
         <div className="flex flex-wrap gap-2 mb-4">{AVATARS.map((a) => <button key={a} onClick={() => props.setNewStudentAvatar(a)} className="text-2xl bg-white rounded-xl p-2 shadow touch-button">{a}</button>)}</div>
-        <div className="space-y-2">{props.students.map((s) => <div key={s.id} className="flex items-center justify-between bg-white rounded-2xl p-3"><div className="font-bold text-xl"><span className="text-3xl mr-2">{s.avatar}</span>{s.name}</div><button onClick={() => props.removeStudent(s.id)} className="text-red-500 touch-button"><Trash2 /></button></div>)}</div>
+        <div className="space-y-2">{props.students.map((s) => <div key={s.id} className="flex items-center justify-between bg-white rounded-2xl p-3"><div className="font-bold text-xl"><span className="text-3xl mr-2">{s.avatar}</span>{s.name}</div><div className="flex items-center gap-2"><select className="rounded-xl border p-2" value={s.team_id || ""} onChange={(e) => props.assignStudentTeam(s.id, e.target.value)}><option value="">No team</option>{props.teams.map((team) => <option key={team.id} value={team.id}>{team.emoji} {team.name}</option>)}</select><button onClick={() => props.removeStudent(s.id)} className="text-red-500 touch-button"><Trash2 /></button></div></div>)}</div>
       </section>
       <section className="rounded-[2rem] bg-green-50 p-5">
+        <h2 className="text-3xl font-black text-green-700 mb-4">Teams</h2>
+        <div className="flex flex-wrap gap-2 mb-3"><input className="flex-1 min-w-40 rounded-2xl border p-3" placeholder="Team name" value={props.newTeamName} onChange={(e) => props.setNewTeamName(e.target.value)} /><input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newTeamEmoji} onChange={(e) => props.setNewTeamEmoji(e.target.value)} /><input type="color" className="h-12 w-16 rounded-xl border" value={props.newTeamColor} onChange={(e) => props.setNewTeamColor(e.target.value)} /><button onClick={props.addTeam} className="rounded-2xl bg-green-500 text-white px-4 font-bold touch-button"><Plus /></button></div>
+        <div className="space-y-2 mb-6">{props.teams.map((team) => <div key={team.id} className="flex items-center justify-between bg-white rounded-2xl p-3" style={{ borderLeft: `12px solid ${team.color}` }}><div className="font-black text-xl">{team.emoji} {team.name}</div><button onClick={() => props.removeTeam(team.id)} className="text-red-500 touch-button"><Trash2 /></button></div>)}</div>
         <h2 className="text-3xl font-black text-green-700 mb-4">Categories</h2>
         <div className="flex flex-wrap gap-2 mb-3">
           <input className="flex-1 min-w-48 rounded-2xl border p-3" placeholder="Category name" value={props.newCategoryName} onChange={(e) => props.setNewCategoryName(e.target.value)} />
