@@ -199,3 +199,82 @@ for all using (public.is_classroom_member(classroom_id)) with check (public.is_c
 drop policy if exists "Members manage captain history" on public.captain_history;
 create policy "Members manage captain history" on public.captain_history
 for all using (public.is_classroom_member(classroom_id)) with check (public.is_classroom_member(classroom_id));
+
+
+drop policy if exists "Creators can delete classrooms" on public.classrooms;
+create policy "Creators can delete classrooms" on public.classrooms
+for delete using (created_by = auth.uid());
+
+
+-- Step: Grade / class competitions
+
+create table if not exists public.competitions (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  grade_name text default '',
+  created_by uuid references auth.users(id) on delete cascade not null,
+  is_active boolean default true,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.competition_classrooms (
+  id uuid primary key default uuid_generate_v4(),
+  competition_id uuid references public.competitions(id) on delete cascade not null,
+  classroom_id uuid references public.classrooms(id) on delete cascade not null,
+  display_name text not null,
+  joined_at timestamptz default now(),
+  unique(competition_id, classroom_id)
+);
+
+create table if not exists public.competition_scores (
+  id uuid primary key default uuid_generate_v4(),
+  competition_id uuid references public.competitions(id) on delete cascade not null,
+  classroom_id uuid references public.classrooms(id) on delete cascade not null,
+  score int default 0,
+  updated_at timestamptz default now(),
+  unique(competition_id, classroom_id)
+);
+
+alter table public.competitions enable row level security;
+alter table public.competition_classrooms enable row level security;
+alter table public.competition_scores enable row level security;
+
+drop policy if exists "Authenticated users can view competitions" on public.competitions;
+create policy "Authenticated users can view competitions" on public.competitions
+for select using (auth.uid() is not null);
+
+drop policy if exists "Users can create competitions" on public.competitions;
+create policy "Users can create competitions" on public.competitions
+for insert with check (created_by = auth.uid());
+
+drop policy if exists "Creators can update competitions" on public.competitions;
+create policy "Creators can update competitions" on public.competitions
+for update using (created_by = auth.uid()) with check (created_by = auth.uid());
+
+drop policy if exists "Creators can delete competitions" on public.competitions;
+create policy "Creators can delete competitions" on public.competitions
+for delete using (created_by = auth.uid());
+
+drop policy if exists "Authenticated users can view competition classrooms" on public.competition_classrooms;
+create policy "Authenticated users can view competition classrooms" on public.competition_classrooms
+for select using (auth.uid() is not null);
+
+drop policy if exists "Class members can join competitions" on public.competition_classrooms;
+create policy "Class members can join competitions" on public.competition_classrooms
+for insert with check (public.is_classroom_member(classroom_id));
+
+drop policy if exists "Class members can remove class from competitions" on public.competition_classrooms;
+create policy "Class members can remove class from competitions" on public.competition_classrooms
+for delete using (public.is_classroom_member(classroom_id));
+
+drop policy if exists "Authenticated users can view competition scores" on public.competition_scores;
+create policy "Authenticated users can view competition scores" on public.competition_scores
+for select using (auth.uid() is not null);
+
+drop policy if exists "Class members can create competition scores" on public.competition_scores;
+create policy "Class members can create competition scores" on public.competition_scores
+for insert with check (public.is_classroom_member(classroom_id));
+
+drop policy if exists "Class members can update competition scores" on public.competition_scores;
+create policy "Class members can update competition scores" on public.competition_scores
+for update using (public.is_classroom_member(classroom_id)) with check (public.is_classroom_member(classroom_id));

@@ -18,6 +18,31 @@ type RewardLog = {
   created_at: string;
 };
 
+type Competition = {
+  id: string;
+  name: string;
+  grade_name: string;
+  created_by: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+type CompetitionClassroom = {
+  id: string;
+  competition_id: string;
+  classroom_id: string;
+  display_name: string;
+  joined_at: string;
+};
+
+type CompetitionScore = {
+  id: string;
+  competition_id: string;
+  classroom_id: string;
+  score: number;
+  updated_at: string;
+};
+
 const DEFAULT_CATEGORIES = [
   ["Ninja Time", "🥷"], ["Lunch Time", "🍱"], ["Nap Time", "😴"],
   ["Class Captain", "🧢"], ["Locker", "🎒"], ["English", "🔤"],
@@ -59,6 +84,9 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [goal, setGoal] = useState<ClassGoal | null>(null);
   const [rewards, setRewards] = useState<RewardLog[]>([]);
+  const [competitions, setCompetitions] = useState<Competition[]>([]);
+  const [competitionClassrooms, setCompetitionClassrooms] = useState<CompetitionClassroom[]>([]);
+  const [competitionScores, setCompetitionScores] = useState<CompetitionScore[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [captainHistory, setCaptainHistory] = useState<CaptainHistory[]>([]);
 
@@ -74,6 +102,9 @@ export default function HomePage() {
   const [message, setMessage] = useState("");
 
   const [newClassName, setNewClassName] = useState("Sunshine Class");
+  const [newCompetitionName, setNewCompetitionName] = useState("");
+  const [newCompetitionGrade, setNewCompetitionGrade] = useState("");
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentAvatar, setNewStudentAvatar] = useState("🥷");
@@ -95,7 +126,7 @@ export default function HomePage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { if (sessionUserId) loadClassrooms(); }, [sessionUserId]);
+  useEffect(() => { if (sessionUserId) { loadClassrooms(); loadCompetitions(); } }, [sessionUserId]);
   useEffect(() => { if (classroomId) loadClassroomData(classroomId); }, [classroomId]);
 
   function playTone(type: "star" | "goal" | "test" = "star") {
@@ -175,6 +206,121 @@ export default function HomePage() {
     await loadClassrooms();
   }
 
+
+  async function loadCompetitions() {
+    const [compRes, classRes, scoreRes] = await Promise.all([
+      supabase.from("competitions").select("*").eq("is_active", true).order("created_at", { ascending: false }),
+      supabase.from("competition_classrooms").select("*"),
+      supabase.from("competition_scores").select("*"),
+    ]);
+
+    if (compRes.error) setMessage(compRes.error.message);
+    if (classRes.error) setMessage(classRes.error.message);
+    if (scoreRes.error) setMessage(scoreRes.error.message);
+
+    setCompetitions((compRes.data ?? []) as Competition[]);
+    setCompetitionClassrooms((classRes.data ?? []) as CompetitionClassroom[]);
+    setCompetitionScores((scoreRes.data ?? []) as CompetitionScore[]);
+  }
+
+  async function createCompetition() {
+    if (!sessionUserId || !newCompetitionName.trim()) return;
+
+    const { data, error } = await supabase
+      .from("competitions")
+      .insert({
+        name: newCompetitionName.trim(),
+        grade_name: newCompetitionGrade.trim(),
+        created_by: sessionUserId,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (error) return setMessage(error.message);
+
+    setNewCompetitionName("");
+    setNewCompetitionGrade("");
+    setMessage("Competition created.");
+
+    if (data && classroomId) {
+      await joinCompetition(data.id);
+    }
+
+    await loadCompetitions();
+  }
+
+  async function joinCompetition(competitionId: string) {
+    if (!activeClassroom) {
+      setMessage("Create or select a classroom first.");
+      return;
+    }
+
+    const { error: joinError } = await supabase.from("competition_classrooms").upsert({
+      competition_id: competitionId,
+      classroom_id: activeClassroom.id,
+      display_name: activeClassroom.name,
+    }, { onConflict: "competition_id,classroom_id" });
+
+    if (joinError) return setMessage(joinError.message);
+
+    const { error: scoreError } = await supabase.from("competition_scores").upsert({
+      competition_id: competitionId,
+      classroom_id: activeClassroom.id,
+      score: 0,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "competition_id,classroom_id" });
+
+    if (scoreError) return setMessage(scoreError.message);
+
+    setMessage("Class joined the competition.");
+    await loadCompetitions();
+  }
+
+  async function leaveCompetition(competitionId: string) {
+    if (!classroomId) return;
+
+    await supabase
+      .from("competition_scores")
+      .delete()
+      .eq("competition_id", competitionId)
+      .eq("classroom_id", classroomId);
+
+    const { error } = await supabase
+      .from("competition_classrooms")
+      .delete()
+      .eq("competition_id", competitionId)
+      .eq("classroom_id", classroomId);
+
+    if (error) return setMessage(error.message);
+
+    setMessage("Class removed from competition.");
+    await loadCompetitions();
+  }
+
+  async function updateCompetitionScores(delta: number) {
+    if (!classroomId || delta === 0) return;
+
+    const joined = competitionClassrooms.filter((entry) => entry.classroom_id === classroomId);
+    if (!joined.length) return;
+
+    for (const entry of joined) {
+      const current = competitionScores.find(
+        (score) => score.competition_id === entry.competition_id && score.classroom_id === classroomId
+      );
+      const nextScore = Math.max(0, (current?.score ?? 0) + delta);
+
+      await supabase.from("competition_scores").upsert({
+        competition_id: entry.competition_id,
+        classroom_id: classroomId,
+        score: nextScore,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "competition_id,classroom_id" });
+    }
+
+    await loadCompetitions();
+  }
+
   async function createClassroom() {
     if (!sessionUserId || !newClassName.trim()) return;
     const { data, error } = await supabase.from("classrooms").insert({ name: newClassName.trim(), created_by: sessionUserId }).select().single();
@@ -183,6 +329,36 @@ export default function HomePage() {
     await supabase.from("class_goals").insert({ classroom_id: data.id, name: "Fill the Sunshine", reward_name: "Bubble Time", target_points: 30, current_points: 0 });
     await supabase.from("categories").insert(DEFAULT_CATEGORIES.map(([name, emoji]) => ({ classroom_id: data.id, name, emoji, points: 1 })));
     setClassroomId(data.id); setMessage("Classroom created."); await loadClassrooms();
+  }
+
+
+  async function deleteCurrentClassroom() {
+    if (!activeClassroom) return;
+
+    if (deleteConfirmName.trim() !== activeClassroom.name) {
+      setMessage("Type the exact class name to confirm deletion.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete "${activeClassroom.name}" permanently? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const { error } = await supabase.from("classrooms").delete().eq("id", activeClassroom.id);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setMessage("Classroom deleted.");
+    setDeleteConfirmName("");
+    setClassroomId("");
+    setStudents([]);
+    setCategories([]);
+    setGoal(null);
+    setRewards([]);
+
+    await loadClassrooms();
   }
 
   async function joinClassroom() {
@@ -277,6 +453,8 @@ export default function HomePage() {
 
     await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
+    await updateCompetitionScores(-1);
+    await updateCompetitionScores(category.points);
 
     setNegativePopStudentId(selectedStudent.id);
     setMessage(`Removed 1 point from ${selectedStudent.name}.`);
@@ -467,6 +645,32 @@ export default function HomePage() {
                   <button onClick={copyInviteCode} className="rounded-2xl bg-purple-600 text-white px-4 py-3 font-bold flex gap-2 items-center touch-button"><Copy /> Copy</button>
                 </div>
               )}
+
+              {activeClassroom && (
+                <details className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-4">
+                  <summary className="cursor-pointer text-lg font-black text-red-700">Delete Classroom</summary>
+                  <p className="mt-3 text-sm text-red-700">
+                    This permanently deletes the class, students, rewards, categories, teams, goals, and captain history.
+                  </p>
+                  <p className="mt-2 text-sm text-slate-700">
+                    Type <b>{activeClassroom.name}</b> to confirm.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <input
+                      className="min-w-64 flex-1 rounded-2xl border border-red-200 p-3"
+                      placeholder="Type class name"
+                      value={deleteConfirmName}
+                      onChange={(e) => setDeleteConfirmName(e.target.value)}
+                    />
+                    <button
+                      onClick={deleteCurrentClassroom}
+                      className="rounded-2xl bg-red-600 px-5 py-3 font-black text-white shadow touch-button"
+                    >
+                      Delete Class
+                    </button>
+                  </div>
+                </details>
+              )}
             </>
           )}
 
@@ -490,6 +694,79 @@ export default function HomePage() {
               {!kioskMode && <><label className="block mt-4 font-bold">Target points</label><input type="number" className="w-full rounded-2xl border p-3" value={goal.target_points} onChange={(e) => updateGoal("target_points", Number(e.target.value))} /><button onClick={() => updateGoal("current_points", 0)} className="w-full mt-3 rounded-2xl bg-slate-900 text-white p-4 font-bold touch-button">Reset Goal Progress</button></>}
             </>
           ) : <p>No goal yet.</p>}
+          
+          <div className="mt-5 rounded-[2rem] bg-indigo-50 p-4 border border-indigo-100">
+            <h2 className="text-2xl font-black text-indigo-700 mb-3">🏆 Class Competitions</h2>
+
+            <div className="grid gap-2 mb-4">
+              <input
+                className="rounded-2xl border p-3"
+                placeholder="Competition name"
+                value={newCompetitionName}
+                onChange={(e) => setNewCompetitionName(e.target.value)}
+              />
+              <input
+                className="rounded-2xl border p-3"
+                placeholder="Grade / group, optional"
+                value={newCompetitionGrade}
+                onChange={(e) => setNewCompetitionGrade(e.target.value)}
+              />
+              <button onClick={createCompetition} className="rounded-2xl bg-indigo-600 p-3 font-black text-white">
+                Create Competition
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {competitions.map((competition) => {
+                const joined = competitionClassrooms.some(
+                  (entry) => entry.competition_id === competition.id && entry.classroom_id === classroomId
+                );
+
+                const leaderboard = competitionClassrooms
+                  .filter((entry) => entry.competition_id === competition.id)
+                  .map((entry) => ({
+                    classroom_id: entry.classroom_id,
+                    name: entry.display_name,
+                    score: competitionScores.find(
+                      (score) => score.competition_id === competition.id && score.classroom_id === entry.classroom_id
+                    )?.score ?? 0,
+                  }))
+                  .sort((a, b) => b.score - a.score);
+
+                return (
+                  <div key={competition.id} className="rounded-2xl bg-white p-3 shadow">
+                    <div className="font-black text-lg">{competition.name}</div>
+                    {competition.grade_name && <div className="text-sm text-slate-500">{competition.grade_name}</div>}
+
+                    <div className="mt-3 space-y-1">
+                      {leaderboard.length ? leaderboard.map((row, index) => (
+                        <div key={row.classroom_id} className={`flex justify-between rounded-xl px-3 py-2 ${row.classroom_id === classroomId ? "bg-yellow-100 font-black" : "bg-slate-50"}`}>
+                          <span>{index + 1}. {row.name}</span>
+                          <span>{row.score}</span>
+                        </div>
+                      )) : <p className="text-sm text-slate-500">No classes joined yet.</p>}
+                    </div>
+
+                    <div className="mt-3">
+                      {joined ? (
+                        <button onClick={() => leaveCompetition(competition.id)} className="rounded-xl bg-red-100 px-3 py-2 font-bold text-red-700">
+                          Leave Competition
+                        </button>
+                      ) : (
+                        <button onClick={() => joinCompetition(competition.id)} className="rounded-xl bg-indigo-100 px-3 py-2 font-bold text-indigo-700">
+                          Join This Class
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {!competitions.length && <p className="text-sm text-slate-500">No competitions yet.</p>}
+            </div>
+          </div>
+
+
           {message && <div className="mt-5 rounded-2xl bg-yellow-100 p-4 font-bold text-orange-900 animate-pop">{message}</div>}
         </aside>
       </section>
