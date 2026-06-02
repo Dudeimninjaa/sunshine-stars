@@ -139,7 +139,17 @@ export default function HomePage() {
   useEffect(() => { if (sessionUserId) { loadClassrooms(); loadCompetitions(); } }, [sessionUserId]);
   useEffect(() => { if (classroomId) loadClassroomData(classroomId); }, [classroomId]);
 
-  function playSound(type: "positive" | "negative" | "goal" | "captain" | "competition" | "test" = "positive") {
+  
+  function triggerNegativeFeedback() {
+    document.body.classList.add("shake-board");
+    document.body.classList.add("negative-flash");
+    setTimeout(() => {
+      document.body.classList.remove("shake-board");
+      document.body.classList.remove("negative-flash");
+    }, 350);
+  }
+
+function playSound(type: "positive" | "negative" | "goal" | "captain" | "competition" | "test" = "positive") {
     if (!activeClassroom?.sounds_enabled && type !== "test") return;
 
     const soundType = type === "test" ? "positive" : type;
@@ -463,7 +473,7 @@ export default function HomePage() {
     await updateCompetitionScores(category.points);
 
     setNegativePopStudentId(selectedStudent.id);
-    playSound("negative");
+    playSound("negative"); triggerNegativeFeedback();
     setMessage(`Removed 1 point from ${selectedStudent.name}.`);
     setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
     await loadClassroomData(classroomId);
@@ -533,7 +543,7 @@ export default function HomePage() {
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
     if (category.points < 0) {
       setNegativePopStudentId(selectedStudent.id);
-      playSound("negative");
+      playSound("negative"); triggerNegativeFeedback();
     } else {
       setPopStudentId(selectedStudent.id);
     }

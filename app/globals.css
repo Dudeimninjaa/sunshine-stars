@@ -34,3 +34,22 @@ body {
   z-index: 60;
   pointer-events: none;
 }
+
+
+.negative-flash{
+  animation: negativeFlash .35s ease-out;
+}
+.shake-board{
+  animation: shakeBoard .3s;
+}
+@keyframes negativeFlash{
+  0%{background:rgba(239,68,68,.35);}
+  100%{background:transparent;}
+}
+@keyframes shakeBoard{
+  0%{transform:translateX(0)}
+  25%{transform:translateX(-8px)}
+  50%{transform:translateX(8px)}
+  75%{transform:translateX(-5px)}
+  100%{transform:translateX(0)}
+}
