@@ -51,6 +51,15 @@ const DEFAULT_CATEGORIES = [
 
 const AVATARS = ["🥷", "🦊", "🐼", "🐯", "🦁", "🐸", "🐵", "🐰", "🦄", "🐲", "⭐", "🌈", "🚀", "🎨", "⚽", "🎵"];
 
+const SOUND_FILES = {
+  positive: "/sounds/positive_reward.mp3",
+  negative: "/sounds/negative_point.mp3",
+  goal: "/sounds/goal_completed.mp3",
+  captain: "/sounds/captain_picker.mp3",
+  competition: "/sounds/competition_win.mp3",
+};
+
+
 const CATEGORY_COLORS = [
   "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6",
   "#8b5cf6", "#ec4899", "#ef4444", "#14b8a6", "#84cc16",
@@ -100,6 +109,7 @@ export default function HomePage() {
   const [todaysCaptainIds, setTodaysCaptainIds] = useState<string[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [message, setMessage] = useState("");
+  const [soundVolume, setSoundVolume] = useState(0.8);
 
   const [newClassName, setNewClassName] = useState("Sunshine Class");
   const [newCompetitionName, setNewCompetitionName] = useState("");
@@ -129,38 +139,31 @@ export default function HomePage() {
   useEffect(() => { if (sessionUserId) { loadClassrooms(); loadCompetitions(); } }, [sessionUserId]);
   useEffect(() => { if (classroomId) loadClassroomData(classroomId); }, [classroomId]);
 
-  function playTone(type: "star" | "goal" | "test" = "star") {
+  function playSound(type: "positive" | "negative" | "goal" | "captain" | "competition" | "test" = "positive") {
     if (!activeClassroom?.sounds_enabled && type !== "test") return;
+
+    const soundType = type === "test" ? "positive" : type;
+    const src = SOUND_FILES[soundType];
+
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass();
-
-      const notes = type === "goal"
-        ? [523.25, 659.25, 783.99, 1046.5]
-        : type === "test"
-          ? [440, 660, 880]
-          : [880, 1174.66];
-
-      notes.forEach((frequency, index) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = type === "goal" ? "triangle" : "sine";
-        osc.frequency.value = frequency;
-
-        const start = ctx.currentTime + index * 0.08;
-        const end = start + (type === "goal" ? 0.26 : 0.18);
-
-        gain.gain.setValueAtTime(0.001, start);
-        gain.gain.exponentialRampToValueAtTime(type === "goal" ? 0.16 : 0.11, start + 0.025);
-        gain.gain.exponentialRampToValueAtTime(0.001, end);
-
-        osc.start(start);
-        osc.stop(end);
+      const audio = new Audio(src);
+      audio.volume = soundVolume;
+      audio.currentTime = 0;
+      audio.play().catch(() => {
+        // Browser may block audio until the first user click/tap.
       });
     } catch {
-      // Browser may block audio until a click/tap happens.
+      // Ignore audio errors so classroom use is not interrupted.
+    }
+  }
+
+  function playTone(type: "star" | "goal" | "test" = "star") {
+    if (type === "goal") {
+      playSound("goal");
+    } else if (type === "test") {
+      playSound("test");
+    } else {
+      playSound("positive");
     }
   }
 
@@ -247,6 +250,9 @@ export default function HomePage() {
       await joinCompetition(data.id);
     }
 
+    if (delta > 0) {
+      playSound("competition");
+    }
     await loadCompetitions();
   }
 
@@ -457,6 +463,7 @@ export default function HomePage() {
     await updateCompetitionScores(category.points);
 
     setNegativePopStudentId(selectedStudent.id);
+    playSound("negative");
     setMessage(`Removed 1 point from ${selectedStudent.name}.`);
     setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
     await loadClassroomData(classroomId);
@@ -495,7 +502,7 @@ export default function HomePage() {
     }
     const team = teams.find((item) => item.id === selectedTeamId);
     setCelebration(`${team?.emoji || "👥"} ${team?.name || "Team"} ${category.points >= 0 ? "+" : ""}${category.points} each!`);
-    if (category.points > 0) { launchSparkles(); playTone("goal"); confetti({ particleCount: 160, spread: 110, origin: { y: 0.6 } }); }
+    if (category.points > 0) { launchSparkles(); playSound("goal"); confetti({ particleCount: 160, spread: 110, origin: { y: 0.6 } }); }
     setTimeout(() => setCelebration(""), 2200);
     await loadClassroomData(classroomId);
   }
@@ -511,7 +518,7 @@ export default function HomePage() {
     setCaptainReveal(picked);
     setTodaysCaptainIds(picked.map((student) => student.id));
     setCelebration("👑 Today's Captains!");
-    playTone("goal");
+    playSound("goal");
     confetti({ particleCount: 220, spread: 120, origin: { y: 0.6 } });
     setTimeout(() => setCelebration(""), 2200);
     await loadClassroomData(classroomId);
@@ -526,18 +533,19 @@ export default function HomePage() {
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
     if (category.points < 0) {
       setNegativePopStudentId(selectedStudent.id);
+      playSound("negative");
     } else {
       setPopStudentId(selectedStudent.id);
     }
     setMessage(category.points >= 0 ? `${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
     if (category.points > 0) {
       launchSparkles();
-      playTone("star");
+      playSound("positive");
     }
     const level = activeClassroom?.animation_level || "high";
     if (category.points > 0 && newGoalTotal >= goal.target_points) {
       setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
-      playTone("goal");
+      playSound("goal");
       confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
       if (level === "high") {
         setTimeout(() => confetti({ particleCount: 180, spread: 140, origin: { y: 0.5 } }), 350);
@@ -677,7 +685,7 @@ export default function HomePage() {
           {mode === "board" ? (
             <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
-            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playTone("test")} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
+            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
             <ReportsMode students={students} rewards={rewards} />
           )}
@@ -953,7 +961,7 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
@@ -1001,7 +1009,25 @@ function SetupMode(props: {
           <label className="block font-bold mb-1">Animation level</label>
           <select className="w-full rounded-2xl border p-3 mb-3" value={props.activeClassroom?.animation_level || "high"} onChange={(e) => props.updateClassroomSetting("animation_level", e.target.value)}><option value="low">Low</option><option value="high">High</option></select>
           <button onClick={() => props.updateClassroomSetting("sounds_enabled", !props.activeClassroom?.sounds_enabled)} className="w-full rounded-2xl bg-slate-900 text-white p-4 font-bold flex justify-center gap-2 items-center mb-3 touch-button">{props.activeClassroom?.sounds_enabled ? <Volume2 /> : <VolumeX />} Sounds: {props.activeClassroom?.sounds_enabled ? "On" : "Off"}</button>
-          <button onClick={props.playTestSound} className="w-full rounded-2xl bg-yellow-400 text-orange-950 p-4 font-bold mb-3 touch-button">Test Sound ✨</button>
+          <div className="rounded-2xl bg-slate-50 p-4 mb-3">
+            <label className="block font-bold mb-2">Sound Volume: {Math.round(props.soundVolume * 100)}%</label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={props.soundVolume}
+              onChange={(e) => props.setSoundVolume(Number(e.target.value))}
+              className="w-full mb-3"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => props.playSound("positive")} className="rounded-xl bg-yellow-100 p-3 font-bold text-orange-800">Test Positive</button>
+              <button onClick={() => props.playSound("negative")} className="rounded-xl bg-red-100 p-3 font-bold text-red-700">Test Negative</button>
+              <button onClick={() => props.playSound("goal")} className="rounded-xl bg-green-100 p-3 font-bold text-green-700">Test Goal</button>
+              <button onClick={() => props.playSound("captain")} className="rounded-xl bg-purple-100 p-3 font-bold text-purple-700">Test Captain</button>
+              <button onClick={() => props.playSound("competition")} className="col-span-2 rounded-xl bg-indigo-100 p-3 font-bold text-indigo-700">Test Competition</button>
+            </div>
+          </div>
           <button onClick={() => props.updateClassroomSetting("kiosk_mode", true)} className="w-full rounded-2xl bg-orange-500 text-white p-4 font-bold flex justify-center gap-2 items-center touch-button"><Maximize /> Open Kiosk Mode</button>
         </div>
       </section>
