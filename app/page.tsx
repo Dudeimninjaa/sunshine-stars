@@ -512,7 +512,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     }
     const team = teams.find((item) => item.id === selectedTeamId);
     setCelebration(`${team?.emoji || "👥"} ${team?.name || "Team"} ${category.points >= 0 ? "+" : ""}${category.points} each!`);
-    if (category.points > 0) { launchSparkles(); playSound("goal"); confetti({ particleCount: 160, spread: 110, origin: { y: 0.6 } }); }
+    if (category.points > 0) { launchSparkles(); playSound("goal");  }
     setTimeout(() => setCelebration(""), 2200);
     await loadClassroomData(classroomId);
   }
@@ -549,7 +549,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     }
     setMessage(category.points >= 0 ? `${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
     if (category.points > 0) {
-      launchSparkles();
+      
       playSound("positive");
     }
     const level = activeClassroom?.animation_level || "high";
@@ -842,14 +842,7 @@ function BoardMode({ students, categories, selectedStudentId, setSelectedStudent
       <div className={`rounded-[2rem] ${theme.soft} p-5`}>
         <h2 className={`text-3xl md:text-4xl font-black mb-4 ${theme.accentText}`}>Tap a reward category</h2>
         {!selectedStudentId && <p className="mb-4 text-lg font-bold text-slate-600">Select a student first.</p>}
-        {selectedStudentId && (
-          <button
-            onClick={quickTakeAwayPoint}
-            className="mb-4 rounded-[1.5rem] bg-red-100 text-red-700 border-2 border-red-200 px-6 py-4 text-2xl font-black shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"
-          >
-            −1 Take Away Point
-          </button>
-        )}
+        
         <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "xl:grid-cols-5" : ""} gap-3`}>
           {categories.map((category) => (
             <button key={category.id} disabled={!selectedStudentId} onClick={() => giveReward(category)} className={`${kioskMode ? "min-h-36 text-3xl" : "text-2xl"} rounded-[1.5rem] ${category.points < 0 ? "bg-red-50 text-red-700 border-2 border-red-200" : "bg-white"} p-5 font-black shadow-lg hover:scale-[1.04] active:scale-95 disabled:opacity-40 transition-all touch-button`}>
