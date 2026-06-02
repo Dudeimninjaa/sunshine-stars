@@ -34,3 +34,46 @@ body {
   z-index: 60;
   pointer-events: none;
 }
+
+
+.negative-flash{
+  animation: negativeFlash .35s ease-out;
+}
+.shake-board{
+  animation: shakeBoard .3s;
+}
+@keyframes negativeFlash{
+  0%{background:rgba(239,68,68,.35);}
+  100%{background:transparent;}
+}
+@keyframes shakeBoard{
+  0%{transform:translateX(0)}
+  25%{transform:translateX(-8px)}
+  50%{transform:translateX(8px)}
+  75%{transform:translateX(-5px)}
+  100%{transform:translateX(0)}
+}
+
+
+.animate-centerReward {
+  animation: centerRewardPop 1.15s cubic-bezier(.16,1,.3,1) forwards;
+}
+
+@keyframes centerRewardPop {
+  0% {
+    transform: scale(.45) rotate(-6deg);
+    opacity: 0;
+  }
+  22% {
+    transform: scale(1.16) rotate(3deg);
+    opacity: 1;
+  }
+  65% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.28) translateY(-40px);
+    opacity: 0;
+  }
+}

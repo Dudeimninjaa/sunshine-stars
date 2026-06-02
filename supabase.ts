@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
-import { Plus, Trash2, Settings, MonitorPlay, Users, Star, LogOut, Copy, UserPlus, Volume2, VolumeX, Maximize, Minimize, BarChart3, Activity } from "lucide-react";
+import { Plus, Trash2, Settings, MonitorPlay, Users, Star, LogOut, Copy, UserPlus, Volume2, VolumeX, Maximize, Minimize, BarChart3, Activity, Trophy, Crown, Shuffle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "@/lib/supabase";
-import type { Category, ClassGoal, Classroom, Student } from "@/lib/types";
+import type { Category, ClassGoal, Classroom, Student, Team, CaptainHistory } from "@/lib/types";
 
 type RewardLog = {
   id: string;
@@ -18,6 +18,31 @@ type RewardLog = {
   created_at: string;
 };
 
+type Competition = {
+  id: string;
+  name: string;
+  grade_name: string;
+  created_by: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+type CompetitionClassroom = {
+  id: string;
+  competition_id: string;
+  classroom_id: string;
+  display_name: string;
+  joined_at: string;
+};
+
+type CompetitionScore = {
+  id: string;
+  competition_id: string;
+  classroom_id: string;
+  score: number;
+  updated_at: string;
+};
+
 const DEFAULT_CATEGORIES = [
   ["Ninja Time", "🥷"], ["Lunch Time", "🍱"], ["Nap Time", "😴"],
   ["Class Captain", "🧢"], ["Locker", "🎒"], ["English", "🔤"],
@@ -25,6 +50,15 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const AVATARS = ["🥷", "🦊", "🐼", "🐯", "🦁", "🐸", "🐵", "🐰", "🦄", "🐲", "⭐", "🌈", "🚀", "🎨", "⚽", "🎵"];
+
+const SOUND_FILES = {
+  positive: "/sounds/positive_reward.mp3",
+  negative: "/sounds/negative_point.mp3",
+  goal: "/sounds/goal_completed.mp3",
+  captain: "/sounds/captain_picker.mp3",
+  competition: "/sounds/competition_win.mp3",
+};
+
 
 const CATEGORY_COLORS = [
   "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6",
@@ -59,19 +93,35 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [goal, setGoal] = useState<ClassGoal | null>(null);
   const [rewards, setRewards] = useState<RewardLog[]>([]);
+  const [competitions, setCompetitions] = useState<Competition[]>([]);
+  const [competitionClassrooms, setCompetitionClassrooms] = useState<CompetitionClassroom[]>([]);
+  const [competitionScores, setCompetitionScores] = useState<CompetitionScore[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [captainHistory, setCaptainHistory] = useState<CaptainHistory[]>([]);
 
   const [mode, setMode] = useState<"board" | "setup" | "reports">("board");
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [popStudentId, setPopStudentId] = useState<string>("");
   const [negativePopStudentId, setNegativePopStudentId] = useState<string>("");
+  const [centerAnimation, setCenterAnimation] = useState<{ text: string; kind: "positive" | "negative" } | null>(null);
   const [sparkles, setSparkles] = useState<{ id: number; x: number; y: number; emoji: string }[]>([]);
   const [celebration, setCelebration] = useState("");
+  const [captainReveal, setCaptainReveal] = useState<Student[]>([]);
+  const [todaysCaptainIds, setTodaysCaptainIds] = useState<string[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [message, setMessage] = useState("");
+  const [soundVolume, setSoundVolume] = useState(0.8);
 
   const [newClassName, setNewClassName] = useState("Sunshine Class");
+  const [newCompetitionName, setNewCompetitionName] = useState("");
+  const [newCompetitionGrade, setNewCompetitionGrade] = useState("");
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentAvatar, setNewStudentAvatar] = useState("🥷");
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamEmoji, setNewTeamEmoji] = useState("🔴");
+  const [newTeamColor, setNewTeamColor] = useState("#ef4444");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryEmoji, setNewCategoryEmoji] = useState("⭐");
   const [newCategoryPoints, setNewCategoryPoints] = useState(1);
@@ -87,41 +137,50 @@ export default function HomePage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { if (sessionUserId) loadClassrooms(); }, [sessionUserId]);
+  useEffect(() => { if (sessionUserId) { loadClassrooms(); loadCompetitions(); } }, [sessionUserId]);
   useEffect(() => { if (classroomId) loadClassroomData(classroomId); }, [classroomId]);
 
-  function playTone(type: "star" | "goal" | "test" = "star") {
+  
+  function triggerNegativeFeedback() {
+    document.body.classList.add("shake-board");
+    document.body.classList.add("negative-flash");
+    setTimeout(() => {
+      document.body.classList.remove("shake-board");
+      document.body.classList.remove("negative-flash");
+    }, 350);
+  }
+
+
+  function showCenterAnimation(text: string, kind: "positive" | "negative") {
+    setCenterAnimation({ text, kind });
+    setTimeout(() => setCenterAnimation(null), 1200);
+  }
+
+function playSound(type: "positive" | "negative" | "goal" | "captain" | "competition" | "test" = "positive") {
     if (!activeClassroom?.sounds_enabled && type !== "test") return;
+
+    const soundType = type === "test" ? "positive" : type;
+    const src = SOUND_FILES[soundType];
+
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass();
-
-      const notes = type === "goal"
-        ? [523.25, 659.25, 783.99, 1046.5]
-        : type === "test"
-          ? [440, 660, 880]
-          : [880, 1174.66];
-
-      notes.forEach((frequency, index) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = type === "goal" ? "triangle" : "sine";
-        osc.frequency.value = frequency;
-
-        const start = ctx.currentTime + index * 0.08;
-        const end = start + (type === "goal" ? 0.26 : 0.18);
-
-        gain.gain.setValueAtTime(0.001, start);
-        gain.gain.exponentialRampToValueAtTime(type === "goal" ? 0.16 : 0.11, start + 0.025);
-        gain.gain.exponentialRampToValueAtTime(0.001, end);
-
-        osc.start(start);
-        osc.stop(end);
+      const audio = new Audio(src);
+      audio.volume = soundVolume;
+      audio.currentTime = 0;
+      audio.play().catch(() => {
+        // Browser may block audio until the first user click/tap.
       });
     } catch {
-      // Browser may block audio until a click/tap happens.
+      // Ignore audio errors so classroom use is not interrupted.
+    }
+  }
+
+  function playTone(type: "star" | "goal" | "test" = "star") {
+    if (type === "goal") {
+      playSound("goal");
+    } else if (type === "test") {
+      playSound("test");
+    } else {
+      playSound("positive");
     }
   }
 
@@ -167,6 +226,124 @@ export default function HomePage() {
     await loadClassrooms();
   }
 
+
+  async function loadCompetitions() {
+    const [compRes, classRes, scoreRes] = await Promise.all([
+      supabase.from("competitions").select("*").eq("is_active", true).order("created_at", { ascending: false }),
+      supabase.from("competition_classrooms").select("*"),
+      supabase.from("competition_scores").select("*"),
+    ]);
+
+    if (compRes.error) setMessage(compRes.error.message);
+    if (classRes.error) setMessage(classRes.error.message);
+    if (scoreRes.error) setMessage(scoreRes.error.message);
+
+    setCompetitions((compRes.data ?? []) as Competition[]);
+    setCompetitionClassrooms((classRes.data ?? []) as CompetitionClassroom[]);
+    setCompetitionScores((scoreRes.data ?? []) as CompetitionScore[]);
+  }
+
+  async function createCompetition() {
+    if (!sessionUserId || !newCompetitionName.trim()) return;
+
+    const { data, error } = await supabase
+      .from("competitions")
+      .insert({
+        name: newCompetitionName.trim(),
+        grade_name: newCompetitionGrade.trim(),
+        created_by: sessionUserId,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (error) return setMessage(error.message);
+
+    setNewCompetitionName("");
+    setNewCompetitionGrade("");
+    setMessage("Competition created.");
+
+    if (data && classroomId) {
+      await joinCompetition(data.id);
+    }
+
+    if (delta > 0) {
+      playSound("competition");
+    }
+    await loadCompetitions();
+  }
+
+  async function joinCompetition(competitionId: string) {
+    if (!activeClassroom) {
+      setMessage("Create or select a classroom first.");
+      return;
+    }
+
+    const { error: joinError } = await supabase.from("competition_classrooms").upsert({
+      competition_id: competitionId,
+      classroom_id: activeClassroom.id,
+      display_name: activeClassroom.name,
+    }, { onConflict: "competition_id,classroom_id" });
+
+    if (joinError) return setMessage(joinError.message);
+
+    const { error: scoreError } = await supabase.from("competition_scores").upsert({
+      competition_id: competitionId,
+      classroom_id: activeClassroom.id,
+      score: 0,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "competition_id,classroom_id" });
+
+    if (scoreError) return setMessage(scoreError.message);
+
+    setMessage("Class joined the competition.");
+    await loadCompetitions();
+  }
+
+  async function leaveCompetition(competitionId: string) {
+    if (!classroomId) return;
+
+    await supabase
+      .from("competition_scores")
+      .delete()
+      .eq("competition_id", competitionId)
+      .eq("classroom_id", classroomId);
+
+    const { error } = await supabase
+      .from("competition_classrooms")
+      .delete()
+      .eq("competition_id", competitionId)
+      .eq("classroom_id", classroomId);
+
+    if (error) return setMessage(error.message);
+
+    setMessage("Class removed from competition.");
+    await loadCompetitions();
+  }
+
+  async function updateCompetitionScores(delta: number) {
+    if (!classroomId || delta === 0) return;
+
+    const joined = competitionClassrooms.filter((entry) => entry.classroom_id === classroomId);
+    if (!joined.length) return;
+
+    for (const entry of joined) {
+      const current = competitionScores.find(
+        (score) => score.competition_id === entry.competition_id && score.classroom_id === classroomId
+      );
+      const nextScore = Math.max(0, (current?.score ?? 0) + delta);
+
+      await supabase.from("competition_scores").upsert({
+        competition_id: entry.competition_id,
+        classroom_id: classroomId,
+        score: nextScore,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "competition_id,classroom_id" });
+    }
+
+    await loadCompetitions();
+  }
+
   async function createClassroom() {
     if (!sessionUserId || !newClassName.trim()) return;
     const { data, error } = await supabase.from("classrooms").insert({ name: newClassName.trim(), created_by: sessionUserId }).select().single();
@@ -175,6 +352,36 @@ export default function HomePage() {
     await supabase.from("class_goals").insert({ classroom_id: data.id, name: "Fill the Sunshine", reward_name: "Bubble Time", target_points: 30, current_points: 0 });
     await supabase.from("categories").insert(DEFAULT_CATEGORIES.map(([name, emoji]) => ({ classroom_id: data.id, name, emoji, points: 1 })));
     setClassroomId(data.id); setMessage("Classroom created."); await loadClassrooms();
+  }
+
+
+  async function deleteCurrentClassroom() {
+    if (!activeClassroom) return;
+
+    if (deleteConfirmName.trim() !== activeClassroom.name) {
+      setMessage("Type the exact class name to confirm deletion.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete "${activeClassroom.name}" permanently? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const { error } = await supabase.from("classrooms").delete().eq("id", activeClassroom.id);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setMessage("Classroom deleted.");
+    setDeleteConfirmName("");
+    setClassroomId("");
+    setStudents([]);
+    setCategories([]);
+    setGoal(null);
+    setRewards([]);
+
+    await loadClassrooms();
   }
 
   async function joinClassroom() {
@@ -192,20 +399,28 @@ export default function HomePage() {
   }
 
   async function loadClassroomData(id: string) {
-    const [studentsRes, categoriesRes, goalsRes, rewardsRes] = await Promise.all([
+    const [studentsRes, categoriesRes, goalsRes, rewardsRes, teamsRes, captainsRes] = await Promise.all([
       supabase.from("students").select("*").eq("classroom_id", id).order("created_at", { ascending: true }),
       supabase.from("categories").select("*").eq("classroom_id", id).order("created_at", { ascending: true }),
       supabase.from("class_goals").select("*").eq("classroom_id", id).limit(1).maybeSingle(),
       supabase.from("rewards").select("*").eq("classroom_id", id).order("created_at", { ascending: false }).limit(500),
+      supabase.from("teams").select("*").eq("classroom_id", id).order("created_at", { ascending: true }),
+      supabase.from("captain_history").select("*").eq("classroom_id", id).order("created_at", { ascending: false }).limit(500),
     ]);
     if (studentsRes.error) setMessage(studentsRes.error.message);
     if (categoriesRes.error) setMessage(categoriesRes.error.message);
     if (goalsRes.error) setMessage(goalsRes.error.message);
     if (rewardsRes.error) setMessage(rewardsRes.error.message);
+    if (teamsRes.error) setMessage(teamsRes.error.message);
+    if (captainsRes.error) setMessage(captainsRes.error.message);
     setStudents(studentsRes.data ?? []);
     setCategories(categoriesRes.data ?? []);
     setGoal(goalsRes.data ?? null);
     setRewards((rewardsRes.data ?? []) as RewardLog[]);
+    setTeams((teamsRes.data ?? []) as Team[]);
+    setCaptainHistory((captainsRes.data ?? []) as CaptainHistory[]);
+    const today = new Date().toISOString().slice(0, 10);
+    setTodaysCaptainIds(((captainsRes.data ?? []) as CaptainHistory[]).filter((c) => c.selected_date === today).map((c) => c.student_id));
   }
 
   async function addStudent() {
@@ -261,10 +476,68 @@ export default function HomePage() {
 
     await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
+    await updateCompetitionScores(-1);
+    await updateCompetitionScores(category.points);
 
     setNegativePopStudentId(selectedStudent.id);
+    playSound("negative"); triggerNegativeFeedback();
     setMessage(`Removed 1 point from ${selectedStudent.name}.`);
-    setTimeout(() => setNegativePopStudentId(""), 1200);
+    setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
+    await loadClassroomData(classroomId);
+  }
+
+  async function addTeam() {
+    if (!classroomId || !newTeamName.trim()) return;
+    const { error } = await supabase.from("teams").insert({ classroom_id: classroomId, name: newTeamName.trim(), emoji: newTeamEmoji, color: newTeamColor });
+    if (error) return setMessage(error.message);
+    setNewTeamName("");
+    await loadClassroomData(classroomId);
+  }
+
+  async function removeTeam(id: string) {
+    const { error } = await supabase.from("teams").delete().eq("id", id);
+    if (error) return setMessage(error.message);
+    await loadClassroomData(classroomId);
+  }
+
+  async function assignStudentTeam(studentId: string, teamId: string) {
+    const { error } = await supabase.from("students").update({ team_id: teamId || null }).eq("id", studentId);
+    if (error) return setMessage(error.message);
+    await loadClassroomData(classroomId);
+  }
+
+  async function giveTeamReward(category: Category) {
+    if (!selectedTeamId) return setMessage("Select a team first.");
+    const teamStudents = students.filter((student) => student.team_id === selectedTeamId);
+    if (!teamStudents.length) return setMessage("That team has no students yet.");
+    for (const student of teamStudents) {
+      await supabase.from("rewards").insert({ classroom_id: classroomId, student_id: student.id, teacher_id: sessionUserId, category_id: category.id, category_name: `Team: ${category.name}`, points: category.points });
+      await supabase.from("students").update({ total_points: Math.max(0, student.total_points + category.points) }).eq("id", student.id);
+    }
+    if (goal) {
+      await supabase.from("class_goals").update({ current_points: Math.max(0, goal.current_points + category.points * teamStudents.length) }).eq("id", goal.id);
+    }
+    const team = teams.find((item) => item.id === selectedTeamId);
+    setCelebration(`${team?.emoji || "👥"} ${team?.name || "Team"} ${category.points >= 0 ? "+" : ""}${category.points} each!`);
+    if (category.points > 0) { launchSparkles(); playSound("goal");  }
+    setTimeout(() => setCelebration(""), 2200);
+    await loadClassroomData(classroomId);
+  }
+
+  async function pickClassCaptains() {
+    if (students.length < 2) return setMessage("Add at least 2 students first.");
+    const chosenBefore = new Set(captainHistory.map((item) => item.student_id));
+    let pool = students.filter((student) => !chosenBefore.has(student.id));
+    if (pool.length < 2) pool = [...students];
+    const picked = [...pool].sort(() => Math.random() - 0.5).slice(0, 2);
+    const today = new Date().toISOString().slice(0, 10);
+    await supabase.from("captain_history").insert(picked.map((student) => ({ classroom_id: classroomId, student_id: student.id, selected_date: today })));
+    setCaptainReveal(picked);
+    setTodaysCaptainIds(picked.map((student) => student.id));
+    setCelebration("👑 Today's Captains!");
+    playSound("goal");
+    confetti({ particleCount: 220, spread: 120, origin: { y: 0.6 } });
+    setTimeout(() => setCelebration(""), 2200);
     await loadClassroomData(classroomId);
   }
 
@@ -275,16 +548,22 @@ export default function HomePage() {
     await supabase.from("rewards").insert({ classroom_id: classroomId, student_id: selectedStudent.id, teacher_id: sessionUserId, category_id: category.id, category_name: category.name, points: category.points });
     await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
-    setPopStudentId(selectedStudent.id);
+    if (category.points < 0) {
+      setNegativePopStudentId(selectedStudent.id);
+      showCenterAnimation("💥 -1", "negative");
+      playSound("negative"); triggerNegativeFeedback();
+    } else {
+      setPopStudentId(selectedStudent.id);
+    }
     setMessage(category.points >= 0 ? `${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
     if (category.points > 0) {
-      launchSparkles();
-      playTone("star");
+      
+      playSound("positive");
     }
     const level = activeClassroom?.animation_level || "high";
     if (category.points > 0 && newGoalTotal >= goal.target_points) {
       setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
-      playTone("goal");
+      playSound("goal");
       confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
       if (level === "high") {
         setTimeout(() => confetti({ particleCount: 180, spread: 140, origin: { y: 0.5 } }), 350);
@@ -295,7 +574,7 @@ export default function HomePage() {
     } else if (level !== "low") {
       confetti({ particleCount: 55, spread: 70, origin: { y: 0.7 } });
     }
-    setTimeout(() => setPopStudentId(""), 950);
+    setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
     await loadClassroomData(classroomId);
   }
 
@@ -324,6 +603,19 @@ export default function HomePage() {
 
   return (
     <main className={`min-h-screen p-3 md:p-5 bg-gradient-to-br ${theme.bg}`}>
+      {centerAnimation && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center pointer-events-none">
+          <div
+            className={`animate-centerReward rounded-[3rem] border-8 border-white px-12 py-8 text-7xl md:text-9xl font-black shadow-2xl ${
+              centerAnimation.kind === "negative"
+                ? "bg-red-500 text-white"
+                : "bg-yellow-300 text-orange-700"
+            }`}
+          >
+            {centerAnimation.text}
+          </div>
+        </div>
+      )}
       {sparkles.map((sparkle) => (
         <div
           key={sparkle.id}
@@ -338,6 +630,22 @@ export default function HomePage() {
           <div className="rounded-[2rem] bg-white/95 px-8 py-6 text-center shadow-2xl border-4 border-yellow-300">
             <div className="text-5xl md:text-7xl font-black text-orange-500">{celebration}</div>
             <div className="text-xl font-bold text-slate-600 mt-2">Amazing class teamwork!</div>
+          </div>
+        </div>
+      )}
+      {captainReveal.length > 0 && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-6">
+          <div className="animate-bannerPop rounded-[2rem] bg-white p-8 text-center shadow-2xl border-4 border-yellow-300 max-w-2xl w-full">
+            <div className="text-5xl font-black text-yellow-600 mb-4">👑 Today's Class Captains 👑</div>
+            <div className="grid grid-cols-2 gap-4">
+              {captainReveal.map((student) => (
+                <div key={student.id} className="rounded-[2rem] bg-yellow-50 p-6 border-4 border-yellow-300">
+                  <div className="text-7xl">{student.avatar}</div>
+                  <div className="text-4xl font-black">{student.name}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setCaptainReveal([])} className="mt-6 rounded-2xl bg-yellow-400 px-8 py-4 text-xl font-black text-orange-950">Done</button>
           </div>
         </div>
       )}
@@ -376,13 +684,39 @@ export default function HomePage() {
                   <button onClick={copyInviteCode} className="rounded-2xl bg-purple-600 text-white px-4 py-3 font-bold flex gap-2 items-center touch-button"><Copy /> Copy</button>
                 </div>
               )}
+
+              {activeClassroom && (
+                <details className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-4">
+                  <summary className="cursor-pointer text-lg font-black text-red-700">Delete Classroom</summary>
+                  <p className="mt-3 text-sm text-red-700">
+                    This permanently deletes the class, students, rewards, categories, teams, goals, and captain history.
+                  </p>
+                  <p className="mt-2 text-sm text-slate-700">
+                    Type <b>{activeClassroom.name}</b> to confirm.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <input
+                      className="min-w-64 flex-1 rounded-2xl border border-red-200 p-3"
+                      placeholder="Type class name"
+                      value={deleteConfirmName}
+                      onChange={(e) => setDeleteConfirmName(e.target.value)}
+                    />
+                    <button
+                      onClick={deleteCurrentClassroom}
+                      className="rounded-2xl bg-red-600 px-5 py-3 font-black text-white shadow touch-button"
+                    >
+                      Delete Class
+                    </button>
+                  </div>
+                </details>
+              )}
             </>
           )}
 
           {mode === "board" ? (
-            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} theme={theme} kioskMode={kioskMode} />
+            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
-            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playTone("test")} />
+            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
             <ReportsMode students={students} rewards={rewards} />
           )}
@@ -399,6 +733,79 @@ export default function HomePage() {
               {!kioskMode && <><label className="block mt-4 font-bold">Target points</label><input type="number" className="w-full rounded-2xl border p-3" value={goal.target_points} onChange={(e) => updateGoal("target_points", Number(e.target.value))} /><button onClick={() => updateGoal("current_points", 0)} className="w-full mt-3 rounded-2xl bg-slate-900 text-white p-4 font-bold touch-button">Reset Goal Progress</button></>}
             </>
           ) : <p>No goal yet.</p>}
+          
+          <div className="mt-5 rounded-[2rem] bg-indigo-50 p-4 border border-indigo-100">
+            <h2 className="text-2xl font-black text-indigo-700 mb-3">🏆 Class Competitions</h2>
+
+            <div className="grid gap-2 mb-4">
+              <input
+                className="rounded-2xl border p-3"
+                placeholder="Competition name"
+                value={newCompetitionName}
+                onChange={(e) => setNewCompetitionName(e.target.value)}
+              />
+              <input
+                className="rounded-2xl border p-3"
+                placeholder="Grade / group, optional"
+                value={newCompetitionGrade}
+                onChange={(e) => setNewCompetitionGrade(e.target.value)}
+              />
+              <button onClick={createCompetition} className="rounded-2xl bg-indigo-600 p-3 font-black text-white">
+                Create Competition
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {competitions.map((competition) => {
+                const joined = competitionClassrooms.some(
+                  (entry) => entry.competition_id === competition.id && entry.classroom_id === classroomId
+                );
+
+                const leaderboard = competitionClassrooms
+                  .filter((entry) => entry.competition_id === competition.id)
+                  .map((entry) => ({
+                    classroom_id: entry.classroom_id,
+                    name: entry.display_name,
+                    score: competitionScores.find(
+                      (score) => score.competition_id === competition.id && score.classroom_id === entry.classroom_id
+                    )?.score ?? 0,
+                  }))
+                  .sort((a, b) => b.score - a.score);
+
+                return (
+                  <div key={competition.id} className="rounded-2xl bg-white p-3 shadow">
+                    <div className="font-black text-lg">{competition.name}</div>
+                    {competition.grade_name && <div className="text-sm text-slate-500">{competition.grade_name}</div>}
+
+                    <div className="mt-3 space-y-1">
+                      {leaderboard.length ? leaderboard.map((row, index) => (
+                        <div key={row.classroom_id} className={`flex justify-between rounded-xl px-3 py-2 ${row.classroom_id === classroomId ? "bg-yellow-100 font-black" : "bg-slate-50"}`}>
+                          <span>{index + 1}. {row.name}</span>
+                          <span>{row.score}</span>
+                        </div>
+                      )) : <p className="text-sm text-slate-500">No classes joined yet.</p>}
+                    </div>
+
+                    <div className="mt-3">
+                      {joined ? (
+                        <button onClick={() => leaveCompetition(competition.id)} className="rounded-xl bg-red-100 px-3 py-2 font-bold text-red-700">
+                          Leave Competition
+                        </button>
+                      ) : (
+                        <button onClick={() => joinCompetition(competition.id)} className="rounded-xl bg-indigo-100 px-3 py-2 font-bold text-indigo-700">
+                          Join This Class
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {!competitions.length && <p className="text-sm text-slate-500">No competitions yet.</p>}
+            </div>
+          </div>
+
+
           {message && <div className="mt-5 rounded-2xl bg-yellow-100 p-4 font-bold text-orange-900 animate-pop">{message}</div>}
         </aside>
       </section>
@@ -406,45 +813,42 @@ export default function HomePage() {
   );
 }
 
-function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, negativePopStudentId, giveReward, quickTakeAwayPoint, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; negativePopStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; theme: any; kioskMode: boolean; }) {
+function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, negativePopStudentId, giveReward, quickTakeAwayPoint, teams, selectedTeamId, setSelectedTeamId, giveTeamReward, pickClassCaptains, todaysCaptainIds, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; negativePopStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; teams: Team[]; selectedTeamId: string; setSelectedTeamId: (id: string) => void; giveTeamReward: (category: Category) => void; pickClassCaptains: () => void; todaysCaptainIds: string[]; theme: any; kioskMode: boolean; }) {
   return (
     <div>
       {kioskMode && <div className="text-center mb-4"><div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div><p className="text-xl text-slate-600">Tap a student, then tap a reward.</p></div>}
       <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "2xl:grid-cols-5" : "xl:grid-cols-4"} gap-4 mb-6`}>
         {students.map((student) => (
           <button key={student.id} onClick={() => setSelectedStudentId(student.id)} className={`relative rounded-[2rem] p-5 md:p-7 ${kioskMode ? "min-h-56" : "min-h-44"} text-center shadow-xl border-4 transition-all touch-button ${selectedStudentId === student.id ? "bg-yellow-100 border-yellow-400 scale-[1.04]" : "bg-white border-white hover:scale-[1.02]"} ${popStudentId === student.id ? "animate-glow" : ""}`}>
-            {popStudentId === student.id && (
-              <div className="absolute inset-x-0 top-8 animate-floatUp pointer-events-none">
-                <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-yellow-300 px-6 py-3 text-5xl md:text-7xl font-black text-orange-700 shadow-2xl border-4 border-white">
-                  ⭐ +1
-                </div>
-              </div>
-            )}
-
-            {negativePopStudentId === student.id && (
-              <div className="absolute inset-x-0 top-8 animate-floatUp pointer-events-none">
-                <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-red-500 px-6 py-3 text-5xl md:text-7xl font-black text-white shadow-2xl border-4 border-white">
-                  💥 -1
-                </div>
-              </div>
-            )}
-            <div className={`${kioskMode ? "text-8xl" : "text-6xl"} mb-2`}>{student.avatar}</div>
-            <div className={`${kioskMode ? "text-4xl" : "text-3xl"} font-black text-slate-800`}>{student.name}</div>
+<div className={`${kioskMode ? "text-8xl" : "text-6xl"} mb-2`}>{student.avatar}</div>
+            <div className={`${kioskMode ? "text-4xl" : "text-3xl"} font-black text-slate-800`}>{todaysCaptainIds.includes(student.id) ? "👑 " : ""}{student.name}</div>
+            {student.team_id && <div className="mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-black text-white" style={{ backgroundColor: teams.find((team) => team.id === student.team_id)?.color || "#64748b" }}>{teams.find((team) => team.id === student.team_id)?.emoji} {teams.find((team) => team.id === student.team_id)?.name}</div>}
             <div className={`${kioskMode ? "text-3xl" : "text-2xl"} font-bold text-orange-500 mt-2`}><Star className="inline" /> {student.total_points}</div>
           </button>
         ))}
       </div>
+      <div className="grid xl:grid-cols-2 gap-4 mb-6">
+        <div className="rounded-[2rem] bg-white p-5 shadow">
+          <h2 className="text-3xl font-black mb-4 flex items-center gap-2"><Trophy /> Team Standings</h2>
+          <div className="space-y-2">
+            {teams.map((team) => { const total = students.filter((student) => student.team_id === team.id).reduce((sum, student) => sum + student.total_points, 0); return (
+              <button key={team.id} onClick={() => setSelectedTeamId(team.id)} className={`w-full rounded-2xl p-3 text-left font-black shadow flex justify-between items-center ${selectedTeamId === team.id ? "ring-4 ring-yellow-300" : ""}`} style={{ borderLeft: `12px solid ${team.color}` }}>
+                <span>{team.emoji} {team.name}</span><span>{total} pts</span>
+              </button> ); })}
+            {!teams.length && <p className="text-slate-500">Create teams in Setup.</p>}
+          </div>
+        </div>
+        <div className="rounded-[2rem] bg-yellow-50 p-5 shadow border border-yellow-100">
+          <h2 className="text-3xl font-black mb-4 flex items-center gap-2 text-yellow-700"><Crown /> Class Captains</h2>
+          <button onClick={pickClassCaptains} className="w-full rounded-2xl bg-yellow-400 p-5 text-2xl font-black text-orange-950 shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"><Shuffle className="inline mr-2" /> Pick 2 Captains</button>
+          <p className="text-sm text-slate-600 mt-3">No-repeat mode is on. The app avoids students who were picked recently until everyone has had a turn.</p>
+        </div>
+      </div>
+
       <div className={`rounded-[2rem] ${theme.soft} p-5`}>
         <h2 className={`text-3xl md:text-4xl font-black mb-4 ${theme.accentText}`}>Tap a reward category</h2>
         {!selectedStudentId && <p className="mb-4 text-lg font-bold text-slate-600">Select a student first.</p>}
-        {selectedStudentId && (
-          <button
-            onClick={quickTakeAwayPoint}
-            className="mb-4 rounded-[1.5rem] bg-red-100 text-red-700 border-2 border-red-200 px-6 py-4 text-2xl font-black shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"
-          >
-            −1 Take Away Point
-          </button>
-        )}
+        
         <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "xl:grid-cols-5" : ""} gap-3`}>
           {categories.map((category) => (
             <button key={category.id} disabled={!selectedStudentId} onClick={() => giveReward(category)} className={`${kioskMode ? "min-h-36 text-3xl" : "text-2xl"} rounded-[1.5rem] ${category.points < 0 ? "bg-red-50 text-red-700 border-2 border-red-200" : "bg-white"} p-5 font-black shadow-lg hover:scale-[1.04] active:scale-95 disabled:opacity-40 transition-all touch-button`}>
@@ -456,6 +860,17 @@ function BoardMode({ students, categories, selectedStudentId, setSelectedStudent
             </button>
           ))}
         </div>
+        {selectedTeamId && (
+          <div className="mt-5 rounded-2xl bg-white p-4 shadow">
+            <h3 className="text-xl font-black mb-3">Team Reward Mode</h3>
+            <p className="text-slate-600 mb-3">Selected team: <b>{teams.find((team) => team.id === selectedTeamId)?.emoji} {teams.find((team) => team.id === selectedTeamId)?.name}</b></p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {categories.map((category) => (
+                <button key={`team-${category.id}`} onClick={() => giveTeamReward(category)} className={`rounded-2xl p-3 font-black ${category.points < 0 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-orange-700"}`}>Team {category.points > 0 ? "+" : ""}{category.points}: {category.name}</button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -555,7 +970,7 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
@@ -563,9 +978,12 @@ function SetupMode(props: {
         <h2 className="text-3xl font-black text-blue-700 mb-4 flex gap-2 items-center"><Users /> Students</h2>
         <div className="flex gap-2 mb-3"><input className="flex-1 rounded-2xl border p-3" placeholder="Student name" value={props.newStudentName} onChange={(e) => props.setNewStudentName(e.target.value)} /><input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newStudentAvatar} onChange={(e) => props.setNewStudentAvatar(e.target.value)} /><button onClick={props.addStudent} className="rounded-2xl bg-blue-500 text-white px-4 font-bold touch-button"><Plus /></button></div>
         <div className="flex flex-wrap gap-2 mb-4">{AVATARS.map((a) => <button key={a} onClick={() => props.setNewStudentAvatar(a)} className="text-2xl bg-white rounded-xl p-2 shadow touch-button">{a}</button>)}</div>
-        <div className="space-y-2">{props.students.map((s) => <div key={s.id} className="flex items-center justify-between bg-white rounded-2xl p-3"><div className="font-bold text-xl"><span className="text-3xl mr-2">{s.avatar}</span>{s.name}</div><button onClick={() => props.removeStudent(s.id)} className="text-red-500 touch-button"><Trash2 /></button></div>)}</div>
+        <div className="space-y-2">{props.students.map((s) => <div key={s.id} className="flex items-center justify-between bg-white rounded-2xl p-3"><div className="font-bold text-xl"><span className="text-3xl mr-2">{s.avatar}</span>{s.name}</div><div className="flex items-center gap-2"><select className="rounded-xl border p-2" value={s.team_id || ""} onChange={(e) => props.assignStudentTeam(s.id, e.target.value)}><option value="">No team</option>{props.teams.map((team) => <option key={team.id} value={team.id}>{team.emoji} {team.name}</option>)}</select><button onClick={() => props.removeStudent(s.id)} className="text-red-500 touch-button"><Trash2 /></button></div></div>)}</div>
       </section>
       <section className="rounded-[2rem] bg-green-50 p-5">
+        <h2 className="text-3xl font-black text-green-700 mb-4">Teams</h2>
+        <div className="flex flex-wrap gap-2 mb-3"><input className="flex-1 min-w-40 rounded-2xl border p-3" placeholder="Team name" value={props.newTeamName} onChange={(e) => props.setNewTeamName(e.target.value)} /><input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newTeamEmoji} onChange={(e) => props.setNewTeamEmoji(e.target.value)} /><input type="color" className="h-12 w-16 rounded-xl border" value={props.newTeamColor} onChange={(e) => props.setNewTeamColor(e.target.value)} /><button onClick={props.addTeam} className="rounded-2xl bg-green-500 text-white px-4 font-bold touch-button"><Plus /></button></div>
+        <div className="space-y-2 mb-6">{props.teams.map((team) => <div key={team.id} className="flex items-center justify-between bg-white rounded-2xl p-3" style={{ borderLeft: `12px solid ${team.color}` }}><div className="font-black text-xl">{team.emoji} {team.name}</div><button onClick={() => props.removeTeam(team.id)} className="text-red-500 touch-button"><Trash2 /></button></div>)}</div>
         <h2 className="text-3xl font-black text-green-700 mb-4">Categories</h2>
         <div className="flex flex-wrap gap-2 mb-3">
           <input className="flex-1 min-w-48 rounded-2xl border p-3" placeholder="Category name" value={props.newCategoryName} onChange={(e) => props.setNewCategoryName(e.target.value)} />
@@ -600,7 +1018,25 @@ function SetupMode(props: {
           <label className="block font-bold mb-1">Animation level</label>
           <select className="w-full rounded-2xl border p-3 mb-3" value={props.activeClassroom?.animation_level || "high"} onChange={(e) => props.updateClassroomSetting("animation_level", e.target.value)}><option value="low">Low</option><option value="high">High</option></select>
           <button onClick={() => props.updateClassroomSetting("sounds_enabled", !props.activeClassroom?.sounds_enabled)} className="w-full rounded-2xl bg-slate-900 text-white p-4 font-bold flex justify-center gap-2 items-center mb-3 touch-button">{props.activeClassroom?.sounds_enabled ? <Volume2 /> : <VolumeX />} Sounds: {props.activeClassroom?.sounds_enabled ? "On" : "Off"}</button>
-          <button onClick={props.playTestSound} className="w-full rounded-2xl bg-yellow-400 text-orange-950 p-4 font-bold mb-3 touch-button">Test Sound ✨</button>
+          <div className="rounded-2xl bg-slate-50 p-4 mb-3">
+            <label className="block font-bold mb-2">Sound Volume: {Math.round(props.soundVolume * 100)}%</label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={props.soundVolume}
+              onChange={(e) => props.setSoundVolume(Number(e.target.value))}
+              className="w-full mb-3"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => props.playSound("positive")} className="rounded-xl bg-yellow-100 p-3 font-bold text-orange-800">Test Positive</button>
+              <button onClick={() => props.playSound("negative")} className="rounded-xl bg-red-100 p-3 font-bold text-red-700">Test Negative</button>
+              <button onClick={() => props.playSound("goal")} className="rounded-xl bg-green-100 p-3 font-bold text-green-700">Test Goal</button>
+              <button onClick={() => props.playSound("captain")} className="rounded-xl bg-purple-100 p-3 font-bold text-purple-700">Test Captain</button>
+              <button onClick={() => props.playSound("competition")} className="col-span-2 rounded-xl bg-indigo-100 p-3 font-bold text-indigo-700">Test Competition</button>
+            </div>
+          </div>
           <button onClick={() => props.updateClassroomSetting("kiosk_mode", true)} className="w-full rounded-2xl bg-orange-500 text-white p-4 font-bold flex justify-center gap-2 items-center touch-button"><Maximize /> Open Kiosk Mode</button>
         </div>
       </section>
