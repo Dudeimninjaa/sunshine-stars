@@ -77,3 +77,16 @@ body {
     opacity: 0;
   }
 }
+
+.board-scroll {
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding-right: .25rem;
+}
+
+.reward-side-panel {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}

@@ -692,7 +692,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
       )}
       {kioskMode && <button onClick={() => updateClassroomSetting("kiosk_mode", false)} className="fixed top-4 right-4 z-50 rounded-2xl bg-white/90 px-4 py-3 font-bold shadow-xl flex gap-2 items-center touch-button"><Minimize /> Exit Kiosk</button>}
 
-      <section className={`grid grid-cols-1 ${kioskMode ? "xl:grid-cols-[1fr_320px]" : "lg:grid-cols-[1fr_360px]"} gap-5`}>
+      <section className="grid grid-cols-1 gap-5">
         <div className={`rounded-[2rem] ${theme.panel} shadow-2xl p-4 md:p-5 border border-white`}>
           {!kioskMode && (
             <>
@@ -842,68 +842,188 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   );
 }
 
-function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, negativePopStudentId, giveReward, quickTakeAwayPoint, teams, selectedTeamId, setSelectedTeamId, giveTeamReward, pickClassCaptains, todaysCaptainIds, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; negativePopStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; teams: Team[]; selectedTeamId: string; setSelectedTeamId: (id: string) => void; giveTeamReward: (category: Category) => void; pickClassCaptains: () => void; todaysCaptainIds: string[]; theme: any; kioskMode: boolean; }) {
+function BoardMode({
+  students,
+  categories,
+  selectedStudentId,
+  setSelectedStudentId,
+  popStudentId,
+  negativePopStudentId,
+  giveReward,
+  quickTakeAwayPoint,
+  teams,
+  selectedTeamId,
+  setSelectedTeamId,
+  giveTeamReward,
+  pickClassCaptains,
+  todaysCaptainIds,
+  theme,
+  kioskMode,
+}: {
+  students: Student[];
+  categories: Category[];
+  selectedStudentId: string;
+  setSelectedStudentId: (id: string) => void;
+  popStudentId: string;
+  negativePopStudentId: string;
+  giveReward: (category: Category) => void;
+  quickTakeAwayPoint: () => void;
+  teams: Team[];
+  selectedTeamId: string;
+  setSelectedTeamId: (id: string) => void;
+  giveTeamReward: (category: Category) => void;
+  pickClassCaptains: () => void;
+  todaysCaptainIds: string[];
+  theme: any;
+  kioskMode: boolean;
+}) {
+  const selectedStudent = students.find((s) => s.id === selectedStudentId);
+
   return (
-    <div>
-      {kioskMode && <div className="text-center mb-4"><div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div><p className="text-xl text-slate-600">Tap a student, then tap a reward.</p></div>}
-      <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "2xl:grid-cols-5" : "xl:grid-cols-4"} gap-4 mb-6`}>
-        {students.map((student) => (
-          <button key={student.id} onClick={() => setSelectedStudentId(student.id)} className={`relative rounded-[2rem] p-5 md:p-7 ${kioskMode ? "min-h-56" : "min-h-44"} text-center shadow-xl border-4 transition-all touch-button ${selectedStudentId === student.id ? "bg-yellow-100 border-yellow-400 scale-[1.04]" : "bg-white border-white hover:scale-[1.02]"} ${popStudentId === student.id ? "animate-glow" : ""}`}>
-<div className={`${kioskMode ? "text-8xl" : "text-6xl"} mb-2`}>{student.avatar}</div>
-            <div className={`${kioskMode ? "text-4xl" : "text-3xl"} font-black text-slate-800`}>{todaysCaptainIds.includes(student.id) ? "👑 " : ""}{student.name}</div>
-            {student.team_id && <div className="mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-black text-white" style={{ backgroundColor: teams.find((team) => team.id === student.team_id)?.color || "#64748b" }}>{teams.find((team) => team.id === student.team_id)?.emoji} {teams.find((team) => team.id === student.team_id)?.name}</div>}
-            <div className={`${kioskMode ? "text-3xl" : "text-2xl"} font-bold text-orange-500 mt-2`}><Star className="inline" /> {student.total_points}</div>
-          </button>
-        ))}
+    <div className="space-y-5">
+      {kioskMode && (
+        <div className="text-center">
+          <div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div>
+          <p className="text-xl text-slate-600">Tap a student, then tap a reward on the side.</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5 items-start">
+        <section className="board-scroll">
+          <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "2xl:grid-cols-4" : "2xl:grid-cols-5"} gap-4`}>
+            {students.map((student) => (
+              <button
+                key={student.id}
+                onClick={() => setSelectedStudentId(student.id)}
+                className={`relative rounded-[2rem] p-5 md:p-6 min-h-44 text-center shadow-xl border-4 transition-all touch-button ${
+                  selectedStudentId === student.id
+                    ? "bg-yellow-100 border-yellow-400 scale-[1.04]"
+                    : "bg-white border-white hover:scale-[1.02]"
+                } ${popStudentId === student.id || negativePopStudentId === student.id ? "animate-glow" : ""}`}
+              >
+                <div className="text-6xl md:text-7xl mb-2">{student.avatar}</div>
+                <div className="text-2xl md:text-3xl font-black text-slate-800">
+                  {todaysCaptainIds.includes(student.id) ? "👑 " : ""}{student.name}
+                </div>
+                {student.team_id && (
+                  <div
+                    className="mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs md:text-sm font-black text-white"
+                    style={{ backgroundColor: teams.find((t) => t.id === student.team_id)?.color || "#64748b" }}
+                  >
+                    {teams.find((t) => t.id === student.team_id)?.emoji} {teams.find((t) => t.id === student.team_id)?.name}
+                  </div>
+                )}
+                <div className="text-2xl md:text-3xl font-bold text-orange-500 mt-2">
+                  <Star className="inline" /> {student.total_points}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <aside className={`reward-side-panel rounded-[2rem] ${theme.soft} p-5 shadow-2xl border border-white`}>
+          <h2 className={`text-3xl font-black mb-2 ${theme.accentText}`}>Rewards</h2>
+          {selectedStudent ? (
+            <div className="mb-4 rounded-2xl bg-white p-4 shadow">
+              <div className="text-sm font-bold text-slate-500">Selected Student</div>
+              <div className="text-3xl font-black">{selectedStudent.avatar} {selectedStudent.name}</div>
+            </div>
+          ) : (
+            <p className="mb-4 rounded-2xl bg-white p-4 text-lg font-bold text-slate-600 shadow">
+              Select a student first.
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 gap-3">
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                disabled={!selectedStudentId}
+                onClick={() => giveReward(category)}
+                className={`rounded-[1.5rem] ${
+                  category.points < 0
+                    ? "bg-red-50 text-red-700 border-2 border-red-200"
+                    : "bg-white"
+                } p-4 text-left text-xl font-black shadow-lg hover:scale-[1.03] active:scale-95 disabled:opacity-40 transition-all touch-button`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-3">
+                    <span className="text-4xl">{category.emoji}</span>
+                    <span>{category.name}</span>
+                  </span>
+                  <span className={`rounded-full px-3 py-1 text-base ${
+                    category.points < 0 ? "bg-red-200 text-red-900" : "bg-yellow-100 text-orange-700"
+                  }`}>
+                    {category.points > 0 ? `+${category.points}` : category.points}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {selectedTeamId && (
+            <div className="mt-5 rounded-2xl bg-white p-4 shadow">
+              <h3 className="text-xl font-black mb-2">Team Reward</h3>
+              <p className="text-slate-600 mb-3">
+                Team: <b>{teams.find((t) => t.id === selectedTeamId)?.emoji} {teams.find((t) => t.id === selectedTeamId)?.name}</b>
+              </p>
+              <div className="grid grid-cols-1 gap-2">
+                {categories.map((category) => (
+                  <button
+                    key={`team-${category.id}`}
+                    onClick={() => giveTeamReward(category)}
+                    className={`rounded-2xl p-3 font-black text-left ${
+                      category.points < 0 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-orange-700"
+                    }`}
+                  >
+                    Team {category.points > 0 ? "+" : ""}{category.points}: {category.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
       </div>
-      <div className="grid xl:grid-cols-2 gap-4 mb-6">
-        <div className="rounded-[2rem] bg-white p-5 shadow">
-          <h2 className="text-3xl font-black mb-4 flex items-center gap-2"><Trophy /> Team Standings</h2>
-          <div className="space-y-2">
-            {teams.map((team) => { const total = students.filter((student) => student.team_id === team.id).reduce((sum, student) => sum + student.total_points, 0); return (
-              <button key={team.id} onClick={() => setSelectedTeamId(team.id)} className={`w-full rounded-2xl p-3 text-left font-black shadow flex justify-between items-center ${selectedTeamId === team.id ? "ring-4 ring-yellow-300" : ""}`} style={{ borderLeft: `12px solid ${team.color}` }}>
-                <span>{team.emoji} {team.name}</span><span>{total} pts</span>
-              </button> ); })}
+
+      <section className="grid xl:grid-cols-3 gap-4">
+        <div className="rounded-[2rem] bg-white p-5 shadow-xl">
+          <h2 className="text-2xl font-black mb-3 flex items-center gap-2"><Crown /> Captains</h2>
+          <button
+            onClick={pickClassCaptains}
+            className="w-full rounded-2xl bg-yellow-400 p-4 text-xl font-black text-orange-950 shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"
+          >
+            <Shuffle className="inline mr-2" /> Pick 2 Captains
+          </button>
+          <p className="text-xs text-slate-500 mt-2">No-repeat mode is on.</p>
+        </div>
+
+        <div className="rounded-[2rem] bg-white p-5 shadow-xl xl:col-span-2">
+          <h2 className="text-2xl font-black mb-3 flex items-center gap-2"><Trophy /> Team Standings</h2>
+          <div className="grid md:grid-cols-2 gap-2">
+            {teams.map((team) => {
+              const total = students.filter((s) => s.team_id === team.id).reduce((sum, s) => sum + s.total_points, 0);
+              return (
+                <button
+                  key={team.id}
+                  onClick={() => setSelectedTeamId(team.id)}
+                  className={`rounded-2xl p-3 text-left font-black shadow flex justify-between items-center ${
+                    selectedTeamId === team.id ? "ring-4 ring-yellow-300" : ""
+                  }`}
+                  style={{ borderLeft: `12px solid ${team.color}` }}
+                >
+                  <span>{team.emoji} {team.name}</span>
+                  <span>{total} pts</span>
+                </button>
+              );
+            })}
             {!teams.length && <p className="text-slate-500">Create teams in Setup.</p>}
           </div>
         </div>
-        <div className="rounded-[2rem] bg-yellow-50 p-5 shadow border border-yellow-100">
-          <h2 className="text-3xl font-black mb-4 flex items-center gap-2 text-yellow-700"><Crown /> Class Captains</h2>
-          <button onClick={pickClassCaptains} className="w-full rounded-2xl bg-yellow-400 p-5 text-2xl font-black text-orange-950 shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"><Shuffle className="inline mr-2" /> Pick 2 Captains</button>
-          <p className="text-sm text-slate-600 mt-3">No-repeat mode is on. The app avoids students who were picked recently until everyone has had a turn.</p>
-        </div>
-      </div>
-
-      <div className={`rounded-[2rem] ${theme.soft} p-5`}>
-        <h2 className={`text-3xl md:text-4xl font-black mb-4 ${theme.accentText}`}>Tap a reward category</h2>
-        {!selectedStudentId && <p className="mb-4 text-lg font-bold text-slate-600">Select a student first.</p>}
-        
-        <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "xl:grid-cols-5" : ""} gap-3`}>
-          {categories.map((category) => (
-            <button key={category.id} disabled={!selectedStudentId} onClick={() => giveReward(category)} className={`${kioskMode ? "min-h-36 text-3xl" : "text-2xl"} rounded-[1.5rem] ${category.points < 0 ? "bg-red-50 text-red-700 border-2 border-red-200" : "bg-white"} p-5 font-black shadow-lg hover:scale-[1.04] active:scale-95 disabled:opacity-40 transition-all touch-button`}>
-              <span className={`${kioskMode ? "text-6xl" : "text-4xl"} block mb-2`}>{category.emoji}</span>
-              <span className="block">{category.name}</span>
-              <span className={`mt-2 inline-block rounded-full px-3 py-1 text-base ${category.points < 0 ? "bg-red-200 text-red-900" : "bg-yellow-100 text-orange-700"}`}>
-                {category.points > 0 ? `+${category.points}` : category.points} pts
-              </span>
-            </button>
-          ))}
-        </div>
-        {selectedTeamId && (
-          <div className="mt-5 rounded-2xl bg-white p-4 shadow">
-            <h3 className="text-xl font-black mb-3">Team Reward Mode</h3>
-            <p className="text-slate-600 mb-3">Selected team: <b>{teams.find((team) => team.id === selectedTeamId)?.emoji} {teams.find((team) => team.id === selectedTeamId)?.name}</b></p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {categories.map((category) => (
-                <button key={`team-${category.id}`} onClick={() => giveTeamReward(category)} className={`rounded-2xl p-3 font-black ${category.points < 0 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-orange-700"}`}>Team {category.points > 0 ? "+" : ""}{category.points}: {category.name}</button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      </section>
     </div>
   );
 }
+
 
 function ReportsMode({ students, rewards }: { students: Student[]; rewards: RewardLog[] }) {
   const today = new Date();
