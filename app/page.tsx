@@ -324,21 +324,41 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   async function updateCompetitionScores(delta: number) {
     if (!classroomId || delta === 0) return;
 
-    const joined = competitionClassrooms.filter((entry) => entry.classroom_id === classroomId);
-    if (!joined.length) return;
+    const { data: joined, error: joinedError } = await supabase
+      .from("competition_classrooms")
+      .select("*")
+      .eq("classroom_id", classroomId);
+
+    if (joinedError) {
+      setMessage(joinedError.message);
+      return;
+    }
+
+    if (!joined || joined.length === 0) return;
 
     for (const entry of joined) {
-      const current = competitionScores.find(
-        (score) => score.competition_id === entry.competition_id && score.classroom_id === classroomId
-      );
-      const nextScore = Math.max(0, (current?.score ?? 0) + delta);
+      const { data: existingScore } = await supabase
+        .from("competition_scores")
+        .select("*")
+        .eq("competition_id", entry.competition_id)
+        .eq("classroom_id", classroomId)
+        .maybeSingle();
 
-      await supabase.from("competition_scores").upsert({
-        competition_id: entry.competition_id,
-        classroom_id: classroomId,
-        score: nextScore,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "competition_id,classroom_id" });
+      const nextScore = Math.max(0, (existingScore?.score ?? 0) + delta);
+
+      const { error: scoreError } = await supabase
+        .from("competition_scores")
+        .upsert({
+          competition_id: entry.competition_id,
+          classroom_id: classroomId,
+          score: nextScore,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "competition_id,classroom_id" });
+
+      if (scoreError) {
+        setMessage(scoreError.message);
+        return;
+      }
     }
 
     await loadCompetitions();
