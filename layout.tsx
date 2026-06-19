@@ -1,116 +1,46 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+import type { Config } from "tailwindcss";
 
-:root {
-  color-scheme: light;
-}
-
-body {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(254, 240, 138, .55), transparent 32rem),
-    radial-gradient(circle at bottom right, rgba(147, 197, 253, .45), transparent 34rem),
-    #fff7ed;
-}
-
-.touch-button {
-  touch-action: manipulation;
-  user-select: none;
-}
-
-.reward-sparkle {
-  position: fixed;
-  z-index: 45;
-  pointer-events: none;
-  font-size: 3rem;
-  filter: drop-shadow(0 8px 16px rgba(0,0,0,.25));
-}
-
-.celebration-banner {
-  position: fixed;
-  top: 45%;
-  left: 50%;
-  z-index: 60;
-  pointer-events: none;
-}
-
-
-.negative-flash{
-  animation: negativeFlash .35s ease-out;
-}
-.shake-board{
-  animation: shakeBoard .3s;
-}
-@keyframes negativeFlash{
-  0%{background:rgba(239,68,68,.35);}
-  100%{background:transparent;}
-}
-@keyframes shakeBoard{
-  0%{transform:translateX(0)}
-  25%{transform:translateX(-8px)}
-  50%{transform:translateX(8px)}
-  75%{transform:translateX(-5px)}
-  100%{transform:translateX(0)}
-}
-
-
-.animate-centerReward {
-  animation: centerRewardPop 1.15s cubic-bezier(.16,1,.3,1) forwards;
-}
-
-@keyframes centerRewardPop {
-  0% {
-    transform: scale(.45) rotate(-6deg);
-    opacity: 0;
-  }
-  22% {
-    transform: scale(1.16) rotate(3deg);
-    opacity: 1;
-  }
-  65% {
-    transform: scale(1) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1.28) translateY(-40px);
-    opacity: 0;
-  }
-}
-
-.board-scroll {
-  max-height: calc(100vh - 220px);
-  overflow-y: auto;
-  padding-right: .25rem;
-}
-
-.reward-side-panel {
-  position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
-}
-
-
-.center-reward-animation {
-  animation: centerRewardPopFixed 1.15s cubic-bezier(.16,1,.3,1) forwards;
-}
-
-@keyframes centerRewardPopFixed {
-  0% {
-    transform: scale(.45) rotate(-6deg);
-    opacity: 0;
-  }
-  20% {
-    transform: scale(1.18) rotate(3deg);
-    opacity: 1;
-  }
-  62% {
-    transform: scale(1) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1.25) translateY(-45px);
-    opacity: 0;
-  }
-}
+const config: Config = {
+  content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}", "./lib/**/*.{js,ts,jsx,tsx}"],
+  theme: {
+    extend: {
+      keyframes: {
+        pop: {
+          "0%": { transform: "scale(.7)", opacity: "0" },
+          "55%": { transform: "scale(1.18)", opacity: "1" },
+          "100%": { transform: "scale(1)", opacity: "1" }
+        },
+        floatUp: {
+          "0%": { transform: "translateY(28px) scale(.65) rotate(-8deg)", opacity: "0" },
+          "18%": { opacity: "1" },
+          "45%": { transform: "translateY(-20px) scale(1.35) rotate(5deg)", opacity: "1" },
+          "100%": { transform: "translateY(-95px) scale(1.75) rotate(-4deg)", opacity: "0" }
+        },
+        glow: {
+          "0%, 100%": { boxShadow: "0 0 0 rgba(250, 204, 21, 0)", transform: "scale(1)" },
+          "35%": { boxShadow: "0 0 55px rgba(250, 204, 21, .95)", transform: "scale(1.05)" },
+          "65%": { boxShadow: "0 0 35px rgba(251, 146, 60, .85)", transform: "scale(1.02)" }
+        },
+        sparkle: {
+          "0%": { transform: "translateY(18px) scale(.7)", opacity: "0" },
+          "20%": { opacity: "1" },
+          "100%": { transform: "translateY(-85px) scale(1.6)", opacity: "0" }
+        },
+        bannerPop: {
+          "0%": { transform: "translate(-50%, -40%) scale(.6)", opacity: "0" },
+          "30%": { transform: "translate(-50%, -50%) scale(1.08)", opacity: "1" },
+          "100%": { transform: "translate(-50%, -50%) scale(1)", opacity: "1" }
+        }
+      },
+      animation: {
+        pop: "pop .28s ease-out",
+        floatUp: "floatUp 1.35s cubic-bezier(.16,1,.3,1) forwards",
+        glow: "glow 1.05s ease-in-out",
+        sparkle: "sparkle 1.15s ease-out forwards",
+        bannerPop: "bannerPop .45s ease-out forwards"
+      }
+    },
+  },
+  plugins: [],
+};
+export default config;

@@ -1,1 +1,1 @@
-Competition scoring reconnected to individual rewards and team rewards. Run latest supabase/schema.sql if scores still do not update.
+Fixed reward animations to display centered on the whole screen above the board UI.

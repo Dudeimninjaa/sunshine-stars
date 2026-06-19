@@ -1,11 +1,1 @@
-# Reliability Step 2
-
-Adds:
-- Undo Last Reward button
-- Saving state
-- Reward buttons disabled while saving
-- Clearer saved/error messages
-- Safer reward saving flow
-- Prevents rapid double-taps from creating duplicate rewards
-
-No new Supabase SQL required beyond Reliability Step 1.
+Board Mode redesign: student cards left, reward buttons sticky right, team/captain/class info at bottom. No new Supabase SQL required.
