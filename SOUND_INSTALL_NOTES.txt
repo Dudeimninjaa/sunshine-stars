@@ -1,1 +1,1 @@
-Adds an Everyone button/section to give a selected point category to the whole class at once. No new SQL required beyond Reliability Step 1.
+Adds editable student icons and editable reward/category icons in Setup Mode. No new Supabase SQL required.
