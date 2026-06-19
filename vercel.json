@@ -1,5 +1,11 @@
-{
-  "installCommand": "npm install --legacy-peer-deps",
-  "buildCommand": "npm run build",
-  "framework": "nextjs"
-}
+# Reliability Step 2
+
+Adds:
+- Undo Last Reward button
+- Saving state
+- Reward buttons disabled while saving
+- Clearer saved/error messages
+- Safer reward saving flow
+- Prevents rapid double-taps from creating duplicate rewards
+
+No new Supabase SQL required beyond Reliability Step 1.

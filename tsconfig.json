@@ -1,41 +1,16 @@
-{
-  "compilerOptions": {
-    "target": "es5",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
-  },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
-}
+# Reliability Step 1
+
+This version improves reliability.
+
+## Fixed / Improved
+
+- Competition scoring now uses a Supabase RPC function
+- Individual rewards update competition scores
+- Negative rewards subtract from competition scores
+- Team rewards update competition scores by total team points
+- Better error message if competition score update fails
+- Reward messages show "Saved" confirmation
+
+## Important
+
+Run the updated `supabase/schema.sql` in Supabase SQL Editor before testing competition scores.

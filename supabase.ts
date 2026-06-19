@@ -110,6 +110,8 @@ export default function HomePage() {
   const [todaysCaptainIds, setTodaysCaptainIds] = useState<string[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [message, setMessage] = useState("");
+  const [isSavingReward, setIsSavingReward] = useState(false);
+  const [lastReward, setLastReward] = useState<RewardLog | null>(null);
   const [soundVolume, setSoundVolume] = useState(0.8);
 
   const [newClassName, setNewClassName] = useState("Sunshine Class");
@@ -324,21 +326,14 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   async function updateCompetitionScores(delta: number) {
     if (!classroomId || delta === 0) return;
 
-    const joined = competitionClassrooms.filter((entry) => entry.classroom_id === classroomId);
-    if (!joined.length) return;
+    const { error } = await supabase.rpc("add_competition_points_for_classroom", {
+      target_classroom_id: classroomId,
+      points_delta: delta,
+    });
 
-    for (const entry of joined) {
-      const current = competitionScores.find(
-        (score) => score.competition_id === entry.competition_id && score.classroom_id === classroomId
-      );
-      const nextScore = Math.max(0, (current?.score ?? 0) + delta);
-
-      await supabase.from("competition_scores").upsert({
-        competition_id: entry.competition_id,
-        classroom_id: classroomId,
-        score: nextScore,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "competition_id,classroom_id" });
+    if (error) {
+      setMessage(`Competition score did not update: ${error.message}`);
+      return;
     }
 
     await loadCompetitions();
@@ -421,6 +416,35 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     setCaptainHistory((captainsRes.data ?? []) as CaptainHistory[]);
     const today = new Date().toISOString().slice(0, 10);
     setTodaysCaptainIds(((captainsRes.data ?? []) as CaptainHistory[]).filter((c) => c.selected_date === today).map((c) => c.student_id));
+  }
+
+
+  async function updateStudentAvatar(studentId: string, avatar: string) {
+    const { error } = await supabase
+      .from("students")
+      .update({ avatar })
+      .eq("id", studentId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    await loadClassroomData(classroomId);
+  }
+
+  async function updateCategoryEmoji(categoryId: string, emoji: string) {
+    const { error } = await supabase
+      .from("categories")
+      .update({ emoji })
+      .eq("id", categoryId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    await loadClassroomData(classroomId);
   }
 
   async function addStudent() {
@@ -541,41 +565,270 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     await loadClassroomData(classroomId);
   }
 
-  async function giveReward(category: Category) {
-    if (!selectedStudent || !goal || !sessionUserId) return;
-    const newStudentTotal = Math.max(0, selectedStudent.total_points + category.points);
-    const newGoalTotal = Math.max(0, goal.current_points + category.points);
-    await supabase.from("rewards").insert({ classroom_id: classroomId, student_id: selectedStudent.id, teacher_id: sessionUserId, category_id: category.id, category_name: category.name, points: category.points });
-    await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
-    await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
-    if (category.points < 0) {
-      setNegativePopStudentId(selectedStudent.id);
-      showCenterAnimation("💥 -1", "negative");
-      playSound("negative"); triggerNegativeFeedback();
-    } else {
-      setPopStudentId(selectedStudent.id);
+
+  async function undoLastReward() {
+    if (!lastReward || isSavingReward) {
+      setMessage("No reward to undo yet.");
+      return;
     }
-    setMessage(category.points >= 0 ? `${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
-    if (category.points > 0) {
-      
-      playSound("positive");
-    }
-    const level = activeClassroom?.animation_level || "high";
-    if (category.points > 0 && newGoalTotal >= goal.target_points) {
-      setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
-      playSound("goal");
-      confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
-      if (level === "high") {
-        setTimeout(() => confetti({ particleCount: 180, spread: 140, origin: { y: 0.5 } }), 350);
-        setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.18, y: 0.7 } }), 650);
-        setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.82, y: 0.7 } }), 800);
+
+    setIsSavingReward(true);
+
+    try {
+      const student = students.find((s) => s.id === lastReward.student_id);
+      const currentStudentPoints = student?.total_points ?? 0;
+      const newStudentTotal = Math.max(0, currentStudentPoints - lastReward.points);
+      const newGoalTotal = goal ? Math.max(0, goal.current_points - lastReward.points) : 0;
+
+      const { error: deleteError } = await supabase
+        .from("rewards")
+        .delete()
+        .eq("id", lastReward.id);
+
+      if (deleteError) {
+        setMessage(`Undo failed: ${deleteError.message}`);
+        return;
       }
-      setTimeout(() => setCelebration(""), 2600);
-    } else if (level !== "low") {
-      confetti({ particleCount: 55, spread: 70, origin: { y: 0.7 } });
+
+      if (student) {
+        const { error: studentError } = await supabase
+          .from("students")
+          .update({ total_points: newStudentTotal })
+          .eq("id", student.id);
+
+        if (studentError) {
+          setMessage(`Undo partly failed: ${studentError.message}`);
+          return;
+        }
+      }
+
+      if (goal) {
+        const { error: goalError } = await supabase
+          .from("class_goals")
+          .update({ current_points: newGoalTotal })
+          .eq("id", goal.id);
+
+        if (goalError) {
+          setMessage(`Undo partly failed: ${goalError.message}`);
+          return;
+        }
+      }
+
+      await updateCompetitionScores(-lastReward.points);
+      setLastReward(null);
+      setMessage("Last reward was undone.");
+      await loadClassroomData(classroomId);
+    } finally {
+      setIsSavingReward(false);
     }
-    setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
-    await loadClassroomData(classroomId);
+  }
+
+
+  async function giveEveryoneReward(category: Category) {
+    if (isSavingReward) return;
+
+    if (!students.length || !goal || !sessionUserId) {
+      setMessage("Add students first.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Give ${category.points > 0 ? "+" : ""}${category.points} point(s) for "${category.name}" to everyone?`
+    );
+
+    if (!confirmed) return;
+
+    setIsSavingReward(true);
+
+    try {
+      const rewardRows = students.map((student) => ({
+        classroom_id: classroomId,
+        student_id: student.id,
+        teacher_id: sessionUserId,
+        category_id: category.id,
+        category_name: `Everyone: ${category.name}`,
+        points: category.points,
+      }));
+
+      const { data: rewardData, error: rewardError } = await supabase
+        .from("rewards")
+        .insert(rewardRows)
+        .select();
+
+      if (rewardError) {
+        setMessage(`Everyone reward did not save: ${rewardError.message}`);
+        return;
+      }
+
+      for (const student of students) {
+        const newTotal = Math.max(0, student.total_points + category.points);
+        const { error: studentError } = await supabase
+          .from("students")
+          .update({ total_points: newTotal })
+          .eq("id", student.id);
+
+        if (studentError) {
+          setMessage(`Some student points did not update: ${studentError.message}`);
+          return;
+        }
+      }
+
+      const totalDelta = category.points * students.length;
+      const newGoalTotal = Math.max(0, goal.current_points + totalDelta);
+
+      const { error: goalError } = await supabase
+        .from("class_goals")
+        .update({ current_points: newGoalTotal })
+        .eq("id", goal.id);
+
+      if (goalError) {
+        setMessage(`Class goal did not update: ${goalError.message}`);
+        return;
+      }
+
+      await updateCompetitionScores(totalDelta);
+
+      if (rewardData && rewardData.length > 0) {
+        setLastReward(rewardData[rewardData.length - 1] as RewardLog);
+      }
+
+      if (category.points < 0) {
+        showCenterAnimation(`⚠️ ${category.points}`, "negative", `Everyone: ${category.name}`);
+        playSound("negative");
+        triggerNegativeFeedback();
+      } else {
+        showCenterAnimation(`⭐ +${category.points}`, "positive", `Everyone: ${category.name}`);
+        launchSparkles();
+        playSound("positive");
+      }
+
+      setMessage(
+        category.points >= 0
+          ? `Saved: Everyone earned ${category.points} point(s) for ${category.name}.`
+          : `Saved: Everyone lost ${Math.abs(category.points)} point(s) for ${category.name}.`
+      );
+
+      const level = activeClassroom?.animation_level || "high";
+      if (category.points > 0 && newGoalTotal >= goal.target_points) {
+        setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
+        showCenterAnimation("🎉 Goal Complete!", "goal", goal.reward_name, 2400);
+        playSound("goal");
+        confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
+        if (level === "high") {
+          setTimeout(() => confetti({ particleCount: 180, spread: 140, origin: { y: 0.5 } }), 350);
+          setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.18, y: 0.7 } }), 650);
+          setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.82, y: 0.7 } }), 800);
+        }
+        setTimeout(() => setCelebration(""), 2600);
+      } else if (category.points > 0 && level !== "low") {
+        confetti({ particleCount: 75, spread: 80, origin: { y: 0.7 } });
+      }
+
+      await loadClassroomData(classroomId);
+    } finally {
+      setIsSavingReward(false);
+    }
+  }
+
+  async function giveReward(category: Category) {
+    if (isSavingReward) return;
+
+    if (!selectedStudent || !goal || !sessionUserId) {
+      setMessage("Select a student first.");
+      return;
+    }
+
+    setIsSavingReward(true);
+
+    try {
+      const newStudentTotal = Math.max(0, selectedStudent.total_points + category.points);
+      const newGoalTotal = Math.max(0, goal.current_points + category.points);
+
+      const { data: rewardData, error: rewardError } = await supabase
+        .from("rewards")
+        .insert({
+          classroom_id: classroomId,
+          student_id: selectedStudent.id,
+          teacher_id: sessionUserId,
+          category_id: category.id,
+          category_name: category.name,
+          points: category.points,
+        })
+        .select()
+        .single();
+
+      if (rewardError) {
+        setMessage(`Reward did not save: ${rewardError.message}`);
+        return;
+      }
+
+      const { error: studentError } = await supabase
+        .from("students")
+        .update({ total_points: newStudentTotal })
+        .eq("id", selectedStudent.id);
+
+      if (studentError) {
+        setMessage(`Student points did not update: ${studentError.message}`);
+        return;
+      }
+
+      const { error: goalError } = await supabase
+        .from("class_goals")
+        .update({ current_points: newGoalTotal })
+        .eq("id", goal.id);
+
+      if (goalError) {
+        setMessage(`Class goal did not update: ${goalError.message}`);
+        return;
+      }
+
+      await updateCompetitionScores(category.points);
+
+      setLastReward(rewardData as RewardLog);
+
+      if (category.points < 0) {
+        setNegativePopStudentId(selectedStudent.id);
+        showCenterAnimation(`⚠️ ${category.points}`, "negative", category.name);
+        playSound("negative");
+        triggerNegativeFeedback();
+      } else {
+        setPopStudentId(selectedStudent.id);
+        showCenterAnimation(`⭐ +${category.points}`, "positive", category.name);
+        launchSparkles();
+        playSound("positive");
+      }
+
+      setMessage(
+        category.points >= 0
+          ? `Saved: ${selectedStudent.name} earned ${category.points} point(s) for ${category.name}.`
+          : `Saved: ${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`
+      );
+
+      const level = activeClassroom?.animation_level || "high";
+      if (category.points > 0 && newGoalTotal >= goal.target_points) {
+        setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
+        showCenterAnimation("🎉 Goal Complete!", "goal", goal.reward_name, 2400);
+        playSound("goal");
+        confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
+        if (level === "high") {
+          setTimeout(() => confetti({ particleCount: 180, spread: 140, origin: { y: 0.5 } }), 350);
+          setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.18, y: 0.7 } }), 650);
+          setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.82, y: 0.7 } }), 800);
+        }
+        setTimeout(() => setCelebration(""), 2600);
+      } else if (category.points > 0 && level !== "low") {
+        confetti({ particleCount: 55, spread: 70, origin: { y: 0.7 } });
+      }
+
+      setTimeout(() => {
+        setPopStudentId("");
+        setNegativePopStudentId("");
+      }, 1200);
+
+      await loadClassroomData(classroomId);
+    } finally {
+      setIsSavingReward(false);
+    }
   }
 
   async function updateGoal(field: keyof Pick<ClassGoal, "name" | "reward_name" | "target_points" | "current_points">, value: string | number) {
@@ -663,7 +916,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
       )}
       {kioskMode && <button onClick={() => updateClassroomSetting("kiosk_mode", false)} className="fixed top-4 right-4 z-50 rounded-2xl bg-white/90 px-4 py-3 font-bold shadow-xl flex gap-2 items-center touch-button"><Minimize /> Exit Kiosk</button>}
 
-      <section className={`grid grid-cols-1 ${kioskMode ? "xl:grid-cols-[1fr_320px]" : "lg:grid-cols-[1fr_360px]"} gap-5`}>
+      <section className="grid grid-cols-1 gap-5">
         <div className={`rounded-[2rem] ${theme.panel} shadow-2xl p-4 md:p-5 border border-white`}>
           {!kioskMode && (
             <>
@@ -714,9 +967,9 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           )}
 
           {mode === "board" ? (
-            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
+            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} giveEveryoneReward={giveEveryoneReward} undoLastReward={undoLastReward} isSavingReward={isSavingReward} lastReward={lastReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
-            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
+            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
             <ReportsMode students={students} rewards={rewards} />
           )}
@@ -813,68 +1066,225 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   );
 }
 
-function BoardMode({ students, categories, selectedStudentId, setSelectedStudentId, popStudentId, negativePopStudentId, giveReward, quickTakeAwayPoint, teams, selectedTeamId, setSelectedTeamId, giveTeamReward, pickClassCaptains, todaysCaptainIds, theme, kioskMode }: { students: Student[]; categories: Category[]; selectedStudentId: string; setSelectedStudentId: (id: string) => void; popStudentId: string; negativePopStudentId: string; giveReward: (category: Category) => void; quickTakeAwayPoint: () => void; teams: Team[]; selectedTeamId: string; setSelectedTeamId: (id: string) => void; giveTeamReward: (category: Category) => void; pickClassCaptains: () => void; todaysCaptainIds: string[]; theme: any; kioskMode: boolean; }) {
+function BoardMode({
+  students,
+  categories,
+  selectedStudentId,
+  setSelectedStudentId,
+  popStudentId,
+  negativePopStudentId,
+  giveReward,
+  giveEveryoneReward,
+  undoLastReward,
+  isSavingReward,
+  lastReward,
+  quickTakeAwayPoint,
+  teams,
+  selectedTeamId,
+  setSelectedTeamId,
+  giveTeamReward,
+  pickClassCaptains,
+  todaysCaptainIds,
+  theme,
+  kioskMode,
+}: {
+  students: Student[];
+  categories: Category[];
+  selectedStudentId: string;
+  setSelectedStudentId: (id: string) => void;
+  popStudentId: string;
+  negativePopStudentId: string;
+  giveReward: (category: Category) => void;
+  giveEveryoneReward: (category: Category) => void;
+  undoLastReward: () => void;
+  isSavingReward: boolean;
+  lastReward: RewardLog | null;
+  quickTakeAwayPoint: () => void;
+  teams: Team[];
+  selectedTeamId: string;
+  setSelectedTeamId: (id: string) => void;
+  giveTeamReward: (category: Category) => void;
+  pickClassCaptains: () => void;
+  todaysCaptainIds: string[];
+  theme: any;
+  kioskMode: boolean;
+}) {
+  const selectedStudent = students.find((s) => s.id === selectedStudentId);
+
   return (
-    <div>
-      {kioskMode && <div className="text-center mb-4"><div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div><p className="text-xl text-slate-600">Tap a student, then tap a reward.</p></div>}
-      <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "2xl:grid-cols-5" : "xl:grid-cols-4"} gap-4 mb-6`}>
-        {students.map((student) => (
-          <button key={student.id} onClick={() => setSelectedStudentId(student.id)} className={`relative rounded-[2rem] p-5 md:p-7 ${kioskMode ? "min-h-56" : "min-h-44"} text-center shadow-xl border-4 transition-all touch-button ${selectedStudentId === student.id ? "bg-yellow-100 border-yellow-400 scale-[1.04]" : "bg-white border-white hover:scale-[1.02]"} ${popStudentId === student.id ? "animate-glow" : ""}`}>
-<div className={`${kioskMode ? "text-8xl" : "text-6xl"} mb-2`}>{student.avatar}</div>
-            <div className={`${kioskMode ? "text-4xl" : "text-3xl"} font-black text-slate-800`}>{todaysCaptainIds.includes(student.id) ? "👑 " : ""}{student.name}</div>
-            {student.team_id && <div className="mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-black text-white" style={{ backgroundColor: teams.find((team) => team.id === student.team_id)?.color || "#64748b" }}>{teams.find((team) => team.id === student.team_id)?.emoji} {teams.find((team) => team.id === student.team_id)?.name}</div>}
-            <div className={`${kioskMode ? "text-3xl" : "text-2xl"} font-bold text-orange-500 mt-2`}><Star className="inline" /> {student.total_points}</div>
-          </button>
-        ))}
+    <div className="space-y-5">
+      {kioskMode && (
+        <div className="text-center">
+          <div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div>
+          <p className="text-xl text-slate-600">Tap a student, then tap a reward on the side.</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5 items-start">
+        <section className="board-scroll">
+          <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "2xl:grid-cols-4" : "2xl:grid-cols-5"} gap-4`}>
+            {students.map((student) => (
+              <button
+                key={student.id}
+                onClick={() => setSelectedStudentId(student.id)}
+                className={`relative rounded-[2rem] p-5 md:p-6 min-h-44 text-center shadow-xl border-4 transition-all touch-button ${
+                  selectedStudentId === student.id
+                    ? "bg-yellow-100 border-yellow-400 scale-[1.04]"
+                    : "bg-white border-white hover:scale-[1.02]"
+                } ${popStudentId === student.id || negativePopStudentId === student.id ? "animate-glow" : ""}`}
+              >
+                <div className="text-6xl md:text-7xl mb-2">{student.avatar}</div>
+                <div className="text-2xl md:text-3xl font-black text-slate-800">
+                  {todaysCaptainIds.includes(student.id) ? "👑 " : ""}{student.name}
+                </div>
+                {student.team_id && (
+                  <div
+                    className="mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs md:text-sm font-black text-white"
+                    style={{ backgroundColor: teams.find((t) => t.id === student.team_id)?.color || "#64748b" }}
+                  >
+                    {teams.find((t) => t.id === student.team_id)?.emoji} {teams.find((t) => t.id === student.team_id)?.name}
+                  </div>
+                )}
+                <div className="text-2xl md:text-3xl font-bold text-orange-500 mt-2">
+                  <Star className="inline" /> {student.total_points}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <aside className={`reward-side-panel rounded-[2rem] ${theme.soft} p-5 shadow-2xl border border-white`}>
+          <h2 className={`text-3xl font-black mb-2 ${theme.accentText}`}>Rewards</h2>
+          {selectedStudent ? (
+            <div className="mb-4 rounded-2xl bg-white p-4 shadow">
+              <div className="text-sm font-bold text-slate-500">Selected Student</div>
+              <div className="text-3xl font-black">{selectedStudent.avatar} {selectedStudent.name}</div>
+            </div>
+          ) : (
+            <p className="mb-4 rounded-2xl bg-white p-4 text-lg font-bold text-slate-600 shadow">
+              Select a student first.
+            </p>
+          )}
+
+          <div className="mb-4 grid grid-cols-1 gap-2">
+            <button
+              onClick={undoLastReward}
+              disabled={!lastReward || isSavingReward}
+              className="rounded-2xl bg-slate-900 text-white p-4 text-xl font-black shadow disabled:opacity-40 touch-button"
+            >
+              ↩ Undo Last Reward
+            </button>
+            {isSavingReward && (
+              <div className="rounded-2xl bg-blue-50 p-3 text-center font-bold text-blue-700">
+                Saving...
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            {categories.map((category) => (
+              <div key={category.id} className="grid grid-cols-[1fr_auto] gap-2">
+                <button
+                  disabled={!selectedStudentId || isSavingReward}
+                  onClick={() => giveReward(category)}
+                  className={`rounded-[1.5rem] ${
+                    category.points < 0
+                      ? "bg-red-50 text-red-700 border-2 border-red-200"
+                      : "bg-white"
+                  } p-4 text-left text-xl font-black shadow-lg hover:scale-[1.03] active:scale-95 disabled:opacity-40 transition-all touch-button`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-3">
+                      <span className="text-4xl">{category.emoji}</span>
+                      <span>{category.name}</span>
+                    </span>
+                    <span className={`rounded-full px-3 py-1 text-base ${
+                      category.points < 0 ? "bg-red-200 text-red-900" : "bg-yellow-100 text-orange-700"
+                    }`}>
+                      {category.points > 0 ? `+${category.points}` : category.points}
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  disabled={isSavingReward || !students.length}
+                  onClick={() => giveEveryoneReward(category)}
+                  className={`rounded-[1.5rem] px-4 text-sm font-black shadow-lg active:scale-95 disabled:opacity-40 touch-button ${
+                    category.points < 0
+                      ? "bg-red-600 text-white"
+                      : "bg-emerald-500 text-white"
+                  }`}
+                  title="Give this reward to everyone"
+                >
+                  Everyone
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {selectedTeamId && (
+            <div className="mt-5 rounded-2xl bg-white p-4 shadow">
+              <h3 className="text-xl font-black mb-2">Team Reward</h3>
+              <p className="text-slate-600 mb-3">
+                Team: <b>{teams.find((t) => t.id === selectedTeamId)?.emoji} {teams.find((t) => t.id === selectedTeamId)?.name}</b>
+              </p>
+              <div className="grid grid-cols-1 gap-2">
+                {categories.map((category) => (
+                  <button
+                    key={`team-${category.id}`}
+                    onClick={() => giveTeamReward(category)}
+                    className={`rounded-2xl p-3 font-black text-left ${
+                      category.points < 0 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-orange-700"
+                    }`}
+                  >
+                    Team {category.points > 0 ? "+" : ""}{category.points}: {category.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
       </div>
-      <div className="grid xl:grid-cols-2 gap-4 mb-6">
-        <div className="rounded-[2rem] bg-white p-5 shadow">
-          <h2 className="text-3xl font-black mb-4 flex items-center gap-2"><Trophy /> Team Standings</h2>
-          <div className="space-y-2">
-            {teams.map((team) => { const total = students.filter((student) => student.team_id === team.id).reduce((sum, student) => sum + student.total_points, 0); return (
-              <button key={team.id} onClick={() => setSelectedTeamId(team.id)} className={`w-full rounded-2xl p-3 text-left font-black shadow flex justify-between items-center ${selectedTeamId === team.id ? "ring-4 ring-yellow-300" : ""}`} style={{ borderLeft: `12px solid ${team.color}` }}>
-                <span>{team.emoji} {team.name}</span><span>{total} pts</span>
-              </button> ); })}
+
+      <section className="grid xl:grid-cols-3 gap-4">
+        <div className="rounded-[2rem] bg-white p-5 shadow-xl">
+          <h2 className="text-2xl font-black mb-3 flex items-center gap-2"><Crown /> Captains</h2>
+          <button
+            onClick={pickClassCaptains}
+            className="w-full rounded-2xl bg-yellow-400 p-4 text-xl font-black text-orange-950 shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"
+          >
+            <Shuffle className="inline mr-2" /> Pick 2 Captains
+          </button>
+          <p className="text-xs text-slate-500 mt-2">No-repeat mode is on.</p>
+        </div>
+
+        <div className="rounded-[2rem] bg-white p-5 shadow-xl xl:col-span-2">
+          <h2 className="text-2xl font-black mb-3 flex items-center gap-2"><Trophy /> Team Standings</h2>
+          <div className="grid md:grid-cols-2 gap-2">
+            {teams.map((team) => {
+              const total = students.filter((s) => s.team_id === team.id).reduce((sum, s) => sum + s.total_points, 0);
+              return (
+                <button
+                  key={team.id}
+                  onClick={() => setSelectedTeamId(team.id)}
+                  className={`rounded-2xl p-3 text-left font-black shadow flex justify-between items-center ${
+                    selectedTeamId === team.id ? "ring-4 ring-yellow-300" : ""
+                  }`}
+                  style={{ borderLeft: `12px solid ${team.color}` }}
+                >
+                  <span>{team.emoji} {team.name}</span>
+                  <span>{total} pts</span>
+                </button>
+              );
+            })}
             {!teams.length && <p className="text-slate-500">Create teams in Setup.</p>}
           </div>
         </div>
-        <div className="rounded-[2rem] bg-yellow-50 p-5 shadow border border-yellow-100">
-          <h2 className="text-3xl font-black mb-4 flex items-center gap-2 text-yellow-700"><Crown /> Class Captains</h2>
-          <button onClick={pickClassCaptains} className="w-full rounded-2xl bg-yellow-400 p-5 text-2xl font-black text-orange-950 shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"><Shuffle className="inline mr-2" /> Pick 2 Captains</button>
-          <p className="text-sm text-slate-600 mt-3">No-repeat mode is on. The app avoids students who were picked recently until everyone has had a turn.</p>
-        </div>
-      </div>
-
-      <div className={`rounded-[2rem] ${theme.soft} p-5`}>
-        <h2 className={`text-3xl md:text-4xl font-black mb-4 ${theme.accentText}`}>Tap a reward category</h2>
-        {!selectedStudentId && <p className="mb-4 text-lg font-bold text-slate-600">Select a student first.</p>}
-        
-        <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "xl:grid-cols-5" : ""} gap-3`}>
-          {categories.map((category) => (
-            <button key={category.id} disabled={!selectedStudentId} onClick={() => giveReward(category)} className={`${kioskMode ? "min-h-36 text-3xl" : "text-2xl"} rounded-[1.5rem] ${category.points < 0 ? "bg-red-50 text-red-700 border-2 border-red-200" : "bg-white"} p-5 font-black shadow-lg hover:scale-[1.04] active:scale-95 disabled:opacity-40 transition-all touch-button`}>
-              <span className={`${kioskMode ? "text-6xl" : "text-4xl"} block mb-2`}>{category.emoji}</span>
-              <span className="block">{category.name}</span>
-              <span className={`mt-2 inline-block rounded-full px-3 py-1 text-base ${category.points < 0 ? "bg-red-200 text-red-900" : "bg-yellow-100 text-orange-700"}`}>
-                {category.points > 0 ? `+${category.points}` : category.points} pts
-              </span>
-            </button>
-          ))}
-        </div>
-        {selectedTeamId && (
-          <div className="mt-5 rounded-2xl bg-white p-4 shadow">
-            <h3 className="text-xl font-black mb-3">Team Reward Mode</h3>
-            <p className="text-slate-600 mb-3">Selected team: <b>{teams.find((team) => team.id === selectedTeamId)?.emoji} {teams.find((team) => team.id === selectedTeamId)?.name}</b></p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {categories.map((category) => (
-                <button key={`team-${category.id}`} onClick={() => giveTeamReward(category)} className={`rounded-2xl p-3 font-black ${category.points < 0 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-orange-700"}`}>Team {category.points > 0 ? "+" : ""}{category.points}: {category.name}</button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      </section>
     </div>
   );
 }
+
 
 function ReportsMode({ students, rewards }: { students: Student[]; rewards: RewardLog[] }) {
   const today = new Date();
@@ -970,21 +1380,29 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
       <section className="rounded-[2rem] bg-blue-50 p-5">
-        <h2 className="text-3xl font-black text-blue-700 mb-4 flex gap-2 items-center"><Users /> Students</h2>
+        <h2 className="text-3xl font-black text-blue-700 mb-4 flex gap-2 items-center"><Users /> Students</h2><p className="mb-3 text-sm text-slate-600">Click or type in the icon boxes to change student icons.</p>
         <div className="flex gap-2 mb-3"><input className="flex-1 rounded-2xl border p-3" placeholder="Student name" value={props.newStudentName} onChange={(e) => props.setNewStudentName(e.target.value)} /><input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newStudentAvatar} onChange={(e) => props.setNewStudentAvatar(e.target.value)} /><button onClick={props.addStudent} className="rounded-2xl bg-blue-500 text-white px-4 font-bold touch-button"><Plus /></button></div>
         <div className="flex flex-wrap gap-2 mb-4">{AVATARS.map((a) => <button key={a} onClick={() => props.setNewStudentAvatar(a)} className="text-2xl bg-white rounded-xl p-2 shadow touch-button">{a}</button>)}</div>
-        <div className="space-y-2">{props.students.map((s) => <div key={s.id} className="flex items-center justify-between bg-white rounded-2xl p-3"><div className="font-bold text-xl"><span className="text-3xl mr-2">{s.avatar}</span>{s.name}</div><div className="flex items-center gap-2"><select className="rounded-xl border p-2" value={s.team_id || ""} onChange={(e) => props.assignStudentTeam(s.id, e.target.value)}><option value="">No team</option>{props.teams.map((team) => <option key={team.id} value={team.id}>{team.emoji} {team.name}</option>)}</select><button onClick={() => props.removeStudent(s.id)} className="text-red-500 touch-button"><Trash2 /></button></div></div>)}</div>
+        <div className="space-y-2">{props.students.map((s) => <div key={s.id} className="flex items-center justify-between bg-white rounded-2xl p-3"><div className="flex items-center gap-3 font-bold text-xl">
+              <input
+                className="w-16 rounded-xl border p-2 text-center text-2xl"
+                value={s.avatar}
+                onChange={(e) => props.updateStudentAvatar(s.id, e.target.value)}
+                title="Change student icon"
+              />
+              <span>{s.name}</span>
+            </div><div className="flex items-center gap-2"><select className="rounded-xl border p-2" value={s.team_id || ""} onChange={(e) => props.assignStudentTeam(s.id, e.target.value)}><option value="">No team</option>{props.teams.map((team) => <option key={team.id} value={team.id}>{team.emoji} {team.name}</option>)}</select><button onClick={() => props.removeStudent(s.id)} className="text-red-500 touch-button"><Trash2 /></button></div></div>)}</div>
       </section>
       <section className="rounded-[2rem] bg-green-50 p-5">
         <h2 className="text-3xl font-black text-green-700 mb-4">Teams</h2>
         <div className="flex flex-wrap gap-2 mb-3"><input className="flex-1 min-w-40 rounded-2xl border p-3" placeholder="Team name" value={props.newTeamName} onChange={(e) => props.setNewTeamName(e.target.value)} /><input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newTeamEmoji} onChange={(e) => props.setNewTeamEmoji(e.target.value)} /><input type="color" className="h-12 w-16 rounded-xl border" value={props.newTeamColor} onChange={(e) => props.setNewTeamColor(e.target.value)} /><button onClick={props.addTeam} className="rounded-2xl bg-green-500 text-white px-4 font-bold touch-button"><Plus /></button></div>
         <div className="space-y-2 mb-6">{props.teams.map((team) => <div key={team.id} className="flex items-center justify-between bg-white rounded-2xl p-3" style={{ borderLeft: `12px solid ${team.color}` }}><div className="font-black text-xl">{team.emoji} {team.name}</div><button onClick={() => props.removeTeam(team.id)} className="text-red-500 touch-button"><Trash2 /></button></div>)}</div>
-        <h2 className="text-3xl font-black text-green-700 mb-4">Categories</h2>
+        <h2 className="text-3xl font-black text-green-700 mb-4">Categories</h2><p className="mb-3 text-sm text-slate-600">Edit the icon box beside each category to change the point icon.</p>
         <div className="flex flex-wrap gap-2 mb-3">
           <input className="flex-1 min-w-48 rounded-2xl border p-3" placeholder="Category name" value={props.newCategoryName} onChange={(e) => props.setNewCategoryName(e.target.value)} />
           <input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newCategoryEmoji} onChange={(e) => props.setNewCategoryEmoji(e.target.value)} />

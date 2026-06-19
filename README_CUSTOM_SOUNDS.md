@@ -1,12 +1,32 @@
-# Custom Sounds Wired
-
-This version uses the audio files in `public/sounds`.
-
-Events:
-- positive reward: positive_reward.mp3
-- negative point: negative_point.mp3
-- goal completed: goal_completed.mp3
-- captain picker: captain_picker.mp3
-- competition score update: competition_win.mp3
-
-Setup Mode includes volume control and test buttons.
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "canvas-confetti": "^1.9.3",
+    "lucide-react": "^0.468.0",
+    "next": "14.2.15",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "^1.6.4",
+    "@types/node": "^20.16.11",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "eslint": "8.57.1",
+    "eslint-config-next": "14.2.15",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "5.6.3"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}
