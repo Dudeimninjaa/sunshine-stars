@@ -1,1 +1,11 @@
-Adds editable student icons and editable reward/category icons in Setup Mode. No new Supabase SQL required.
+# Reliability Step 2
+
+Adds:
+- Undo Last Reward button
+- Saving state
+- Reward buttons disabled while saving
+- Clearer saved/error messages
+- Safer reward saving flow
+- Prevents rapid double-taps from creating duplicate rewards
+
+No new Supabase SQL required beyond Reliability Step 1.

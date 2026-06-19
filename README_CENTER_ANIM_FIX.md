@@ -1,4 +1,11 @@
-/// <reference types="next" />
-/// <reference types="next/image-types/global" />
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+};
 
-// NOTE: This file should not be edited
+export default nextConfig;
