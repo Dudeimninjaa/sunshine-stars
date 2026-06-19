@@ -1,1 +1,1 @@
-This package has a validated clean package.json and no vercel.json. Upload the root contents to GitHub.
+Competition scoring reconnected to individual rewards and team rewards. Run latest supabase/schema.sql if scores still do not update.

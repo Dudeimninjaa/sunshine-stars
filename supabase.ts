@@ -110,8 +110,6 @@ export default function HomePage() {
   const [todaysCaptainIds, setTodaysCaptainIds] = useState<string[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [message, setMessage] = useState("");
-  const [isSavingReward, setIsSavingReward] = useState(false);
-  const [lastReward, setLastReward] = useState<RewardLog | null>(null);
   const [soundVolume, setSoundVolume] = useState(0.8);
 
   const [newClassName, setNewClassName] = useState("Sunshine Class");
@@ -326,14 +324,41 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   async function updateCompetitionScores(delta: number) {
     if (!classroomId || delta === 0) return;
 
-    const { error } = await supabase.rpc("add_competition_points_for_classroom", {
-      target_classroom_id: classroomId,
-      points_delta: delta,
-    });
+    const { data: joined, error: joinedError } = await supabase
+      .from("competition_classrooms")
+      .select("*")
+      .eq("classroom_id", classroomId);
 
-    if (error) {
-      setMessage(`Competition score did not update: ${error.message}`);
+    if (joinedError) {
+      setMessage(joinedError.message);
       return;
+    }
+
+    if (!joined || joined.length === 0) return;
+
+    for (const entry of joined) {
+      const { data: existingScore } = await supabase
+        .from("competition_scores")
+        .select("*")
+        .eq("competition_id", entry.competition_id)
+        .eq("classroom_id", classroomId)
+        .maybeSingle();
+
+      const nextScore = Math.max(0, (existingScore?.score ?? 0) + delta);
+
+      const { error: scoreError } = await supabase
+        .from("competition_scores")
+        .upsert({
+          competition_id: entry.competition_id,
+          classroom_id: classroomId,
+          score: nextScore,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "competition_id,classroom_id" });
+
+      if (scoreError) {
+        setMessage(scoreError.message);
+        return;
+      }
     }
 
     await loadCompetitions();
@@ -565,270 +590,41 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     await loadClassroomData(classroomId);
   }
 
-
-  async function undoLastReward() {
-    if (!lastReward || isSavingReward) {
-      setMessage("No reward to undo yet.");
-      return;
-    }
-
-    setIsSavingReward(true);
-
-    try {
-      const student = students.find((s) => s.id === lastReward.student_id);
-      const currentStudentPoints = student?.total_points ?? 0;
-      const newStudentTotal = Math.max(0, currentStudentPoints - lastReward.points);
-      const newGoalTotal = goal ? Math.max(0, goal.current_points - lastReward.points) : 0;
-
-      const { error: deleteError } = await supabase
-        .from("rewards")
-        .delete()
-        .eq("id", lastReward.id);
-
-      if (deleteError) {
-        setMessage(`Undo failed: ${deleteError.message}`);
-        return;
-      }
-
-      if (student) {
-        const { error: studentError } = await supabase
-          .from("students")
-          .update({ total_points: newStudentTotal })
-          .eq("id", student.id);
-
-        if (studentError) {
-          setMessage(`Undo partly failed: ${studentError.message}`);
-          return;
-        }
-      }
-
-      if (goal) {
-        const { error: goalError } = await supabase
-          .from("class_goals")
-          .update({ current_points: newGoalTotal })
-          .eq("id", goal.id);
-
-        if (goalError) {
-          setMessage(`Undo partly failed: ${goalError.message}`);
-          return;
-        }
-      }
-
-      await updateCompetitionScores(-lastReward.points);
-      setLastReward(null);
-      setMessage("Last reward was undone.");
-      await loadClassroomData(classroomId);
-    } finally {
-      setIsSavingReward(false);
-    }
-  }
-
-
-  async function giveEveryoneReward(category: Category) {
-    if (isSavingReward) return;
-
-    if (!students.length || !goal || !sessionUserId) {
-      setMessage("Add students first.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Give ${category.points > 0 ? "+" : ""}${category.points} point(s) for "${category.name}" to everyone?`
-    );
-
-    if (!confirmed) return;
-
-    setIsSavingReward(true);
-
-    try {
-      const rewardRows = students.map((student) => ({
-        classroom_id: classroomId,
-        student_id: student.id,
-        teacher_id: sessionUserId,
-        category_id: category.id,
-        category_name: `Everyone: ${category.name}`,
-        points: category.points,
-      }));
-
-      const { data: rewardData, error: rewardError } = await supabase
-        .from("rewards")
-        .insert(rewardRows)
-        .select();
-
-      if (rewardError) {
-        setMessage(`Everyone reward did not save: ${rewardError.message}`);
-        return;
-      }
-
-      for (const student of students) {
-        const newTotal = Math.max(0, student.total_points + category.points);
-        const { error: studentError } = await supabase
-          .from("students")
-          .update({ total_points: newTotal })
-          .eq("id", student.id);
-
-        if (studentError) {
-          setMessage(`Some student points did not update: ${studentError.message}`);
-          return;
-        }
-      }
-
-      const totalDelta = category.points * students.length;
-      const newGoalTotal = Math.max(0, goal.current_points + totalDelta);
-
-      const { error: goalError } = await supabase
-        .from("class_goals")
-        .update({ current_points: newGoalTotal })
-        .eq("id", goal.id);
-
-      if (goalError) {
-        setMessage(`Class goal did not update: ${goalError.message}`);
-        return;
-      }
-
-      await updateCompetitionScores(totalDelta);
-
-      if (rewardData && rewardData.length > 0) {
-        setLastReward(rewardData[rewardData.length - 1] as RewardLog);
-      }
-
-      if (category.points < 0) {
-        showCenterAnimation(`⚠️ ${category.points}`, "negative", `Everyone: ${category.name}`);
-        playSound("negative");
-        triggerNegativeFeedback();
-      } else {
-        showCenterAnimation(`⭐ +${category.points}`, "positive", `Everyone: ${category.name}`);
-        launchSparkles();
-        playSound("positive");
-      }
-
-      setMessage(
-        category.points >= 0
-          ? `Saved: Everyone earned ${category.points} point(s) for ${category.name}.`
-          : `Saved: Everyone lost ${Math.abs(category.points)} point(s) for ${category.name}.`
-      );
-
-      const level = activeClassroom?.animation_level || "high";
-      if (category.points > 0 && newGoalTotal >= goal.target_points) {
-        setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
-        showCenterAnimation("🎉 Goal Complete!", "goal", goal.reward_name, 2400);
-        playSound("goal");
-        confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
-        if (level === "high") {
-          setTimeout(() => confetti({ particleCount: 180, spread: 140, origin: { y: 0.5 } }), 350);
-          setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.18, y: 0.7 } }), 650);
-          setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.82, y: 0.7 } }), 800);
-        }
-        setTimeout(() => setCelebration(""), 2600);
-      } else if (category.points > 0 && level !== "low") {
-        confetti({ particleCount: 75, spread: 80, origin: { y: 0.7 } });
-      }
-
-      await loadClassroomData(classroomId);
-    } finally {
-      setIsSavingReward(false);
-    }
-  }
-
   async function giveReward(category: Category) {
-    if (isSavingReward) return;
-
-    if (!selectedStudent || !goal || !sessionUserId) {
-      setMessage("Select a student first.");
-      return;
+    if (!selectedStudent || !goal || !sessionUserId) return;
+    const newStudentTotal = Math.max(0, selectedStudent.total_points + category.points);
+    const newGoalTotal = Math.max(0, goal.current_points + category.points);
+    await supabase.from("rewards").insert({ classroom_id: classroomId, student_id: selectedStudent.id, teacher_id: sessionUserId, category_id: category.id, category_name: category.name, points: category.points });
+    await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
+    await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
+    if (category.points < 0) {
+      setNegativePopStudentId(selectedStudent.id);
+      showCenterAnimation("💥 -1", "negative");
+      playSound("negative"); triggerNegativeFeedback();
+    } else {
+      setPopStudentId(selectedStudent.id);
     }
-
-    setIsSavingReward(true);
-
-    try {
-      const newStudentTotal = Math.max(0, selectedStudent.total_points + category.points);
-      const newGoalTotal = Math.max(0, goal.current_points + category.points);
-
-      const { data: rewardData, error: rewardError } = await supabase
-        .from("rewards")
-        .insert({
-          classroom_id: classroomId,
-          student_id: selectedStudent.id,
-          teacher_id: sessionUserId,
-          category_id: category.id,
-          category_name: category.name,
-          points: category.points,
-        })
-        .select()
-        .single();
-
-      if (rewardError) {
-        setMessage(`Reward did not save: ${rewardError.message}`);
-        return;
-      }
-
-      const { error: studentError } = await supabase
-        .from("students")
-        .update({ total_points: newStudentTotal })
-        .eq("id", selectedStudent.id);
-
-      if (studentError) {
-        setMessage(`Student points did not update: ${studentError.message}`);
-        return;
-      }
-
-      const { error: goalError } = await supabase
-        .from("class_goals")
-        .update({ current_points: newGoalTotal })
-        .eq("id", goal.id);
-
-      if (goalError) {
-        setMessage(`Class goal did not update: ${goalError.message}`);
-        return;
-      }
-
-      await updateCompetitionScores(category.points);
-
-      setLastReward(rewardData as RewardLog);
-
-      if (category.points < 0) {
-        setNegativePopStudentId(selectedStudent.id);
-        showCenterAnimation(`⚠️ ${category.points}`, "negative", category.name);
-        playSound("negative");
-        triggerNegativeFeedback();
-      } else {
-        setPopStudentId(selectedStudent.id);
-        showCenterAnimation(`⭐ +${category.points}`, "positive", category.name);
-        launchSparkles();
-        playSound("positive");
-      }
-
-      setMessage(
-        category.points >= 0
-          ? `Saved: ${selectedStudent.name} earned ${category.points} point(s) for ${category.name}.`
-          : `Saved: ${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`
-      );
-
-      const level = activeClassroom?.animation_level || "high";
-      if (category.points > 0 && newGoalTotal >= goal.target_points) {
-        setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
-        showCenterAnimation("🎉 Goal Complete!", "goal", goal.reward_name, 2400);
-        playSound("goal");
-        confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
-        if (level === "high") {
-          setTimeout(() => confetti({ particleCount: 180, spread: 140, origin: { y: 0.5 } }), 350);
-          setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.18, y: 0.7 } }), 650);
-          setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.82, y: 0.7 } }), 800);
-        }
-        setTimeout(() => setCelebration(""), 2600);
-      } else if (category.points > 0 && level !== "low") {
-        confetti({ particleCount: 55, spread: 70, origin: { y: 0.7 } });
-      }
-
-      setTimeout(() => {
-        setPopStudentId("");
-        setNegativePopStudentId("");
-      }, 1200);
-
-      await loadClassroomData(classroomId);
-    } finally {
-      setIsSavingReward(false);
+    setMessage(category.points >= 0 ? `${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
+    if (category.points > 0) {
+      
+      playSound("positive");
     }
+    const level = activeClassroom?.animation_level || "high";
+    if (category.points > 0 && newGoalTotal >= goal.target_points) {
+      setCelebration(`🎉 ${goal.reward_name} Unlocked!`);
+      playSound("goal");
+      confetti({ particleCount: level === "low" ? 100 : 260, spread: 100, origin: { y: 0.65 } });
+      if (level === "high") {
+        setTimeout(() => confetti({ particleCount: 180, spread: 140, origin: { y: 0.5 } }), 350);
+        setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.18, y: 0.7 } }), 650);
+        setTimeout(() => confetti({ particleCount: 120, spread: 100, origin: { x: 0.82, y: 0.7 } }), 800);
+      }
+      setTimeout(() => setCelebration(""), 2600);
+    } else if (level !== "low") {
+      confetti({ particleCount: 55, spread: 70, origin: { y: 0.7 } });
+    }
+    setTimeout(() => { setPopStudentId(""); setNegativePopStudentId(""); }, 1200);
+    await loadClassroomData(classroomId);
   }
 
   async function updateGoal(field: keyof Pick<ClassGoal, "name" | "reward_name" | "target_points" | "current_points">, value: string | number) {
@@ -967,7 +763,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           )}
 
           {mode === "board" ? (
-            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} giveEveryoneReward={giveEveryoneReward} undoLastReward={undoLastReward} isSavingReward={isSavingReward} lastReward={lastReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
+            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
             <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
@@ -1074,10 +870,6 @@ function BoardMode({
   popStudentId,
   negativePopStudentId,
   giveReward,
-  giveEveryoneReward,
-  undoLastReward,
-  isSavingReward,
-  lastReward,
   quickTakeAwayPoint,
   teams,
   selectedTeamId,
@@ -1095,10 +887,6 @@ function BoardMode({
   popStudentId: string;
   negativePopStudentId: string;
   giveReward: (category: Category) => void;
-  giveEveryoneReward: (category: Category) => void;
-  undoLastReward: () => void;
-  isSavingReward: boolean;
-  lastReward: RewardLog | null;
   quickTakeAwayPoint: () => void;
   teams: Team[];
   selectedTeamId: string;
@@ -1166,59 +954,30 @@ function BoardMode({
             </p>
           )}
 
-          <div className="mb-4 grid grid-cols-1 gap-2">
-            <button
-              onClick={undoLastReward}
-              disabled={!lastReward || isSavingReward}
-              className="rounded-2xl bg-slate-900 text-white p-4 text-xl font-black shadow disabled:opacity-40 touch-button"
-            >
-              ↩ Undo Last Reward
-            </button>
-            {isSavingReward && (
-              <div className="rounded-2xl bg-blue-50 p-3 text-center font-bold text-blue-700">
-                Saving...
-              </div>
-            )}
-          </div>
-
           <div className="grid grid-cols-1 gap-3">
             {categories.map((category) => (
-              <div key={category.id} className="grid grid-cols-[1fr_auto] gap-2">
-                <button
-                  disabled={!selectedStudentId || isSavingReward}
-                  onClick={() => giveReward(category)}
-                  className={`rounded-[1.5rem] ${
-                    category.points < 0
-                      ? "bg-red-50 text-red-700 border-2 border-red-200"
-                      : "bg-white"
-                  } p-4 text-left text-xl font-black shadow-lg hover:scale-[1.03] active:scale-95 disabled:opacity-40 transition-all touch-button`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-3">
-                      <span className="text-4xl">{category.emoji}</span>
-                      <span>{category.name}</span>
-                    </span>
-                    <span className={`rounded-full px-3 py-1 text-base ${
-                      category.points < 0 ? "bg-red-200 text-red-900" : "bg-yellow-100 text-orange-700"
-                    }`}>
-                      {category.points > 0 ? `+${category.points}` : category.points}
-                    </span>
-                  </div>
-                </button>
-
-                <button
-                  disabled={isSavingReward || !students.length}
-                  onClick={() => giveEveryoneReward(category)}
-                  className={`rounded-[1.5rem] px-4 text-sm font-black shadow-lg active:scale-95 disabled:opacity-40 touch-button ${
-                    category.points < 0
-                      ? "bg-red-600 text-white"
-                      : "bg-emerald-500 text-white"
-                  }`}
-                  title="Give this reward to everyone"
-                >
-                  Everyone
-                </button>
-              </div>
+              <button
+                key={category.id}
+                disabled={!selectedStudentId}
+                onClick={() => giveReward(category)}
+                className={`rounded-[1.5rem] ${
+                  category.points < 0
+                    ? "bg-red-50 text-red-700 border-2 border-red-200"
+                    : "bg-white"
+                } p-4 text-left text-xl font-black shadow-lg hover:scale-[1.03] active:scale-95 disabled:opacity-40 transition-all touch-button`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-3">
+                    <span className="text-4xl">{category.emoji}</span>
+                    <span>{category.name}</span>
+                  </span>
+                  <span className={`rounded-full px-3 py-1 text-base ${
+                    category.points < 0 ? "bg-red-200 text-red-900" : "bg-yellow-100 text-orange-700"
+                  }`}>
+                    {category.points > 0 ? `+${category.points}` : category.points}
+                  </span>
+                </div>
+              </button>
             ))}
           </div>
 

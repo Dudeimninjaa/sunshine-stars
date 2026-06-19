@@ -1,16 +1,12 @@
-# Reliability Step 1
+# Custom Sounds Wired
 
-This version improves reliability.
+This version uses the audio files in `public/sounds`.
 
-## Fixed / Improved
+Events:
+- positive reward: positive_reward.mp3
+- negative point: negative_point.mp3
+- goal completed: goal_completed.mp3
+- captain picker: captain_picker.mp3
+- competition score update: competition_win.mp3
 
-- Competition scoring now uses a Supabase RPC function
-- Individual rewards update competition scores
-- Negative rewards subtract from competition scores
-- Team rewards update competition scores by total team points
-- Better error message if competition score update fails
-- Reward messages show "Saved" confirmation
-
-## Important
-
-Run the updated `supabase/schema.sql` in Supabase SQL Editor before testing competition scores.
+Setup Mode includes volume control and test buttons.
