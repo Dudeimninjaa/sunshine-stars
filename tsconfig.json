@@ -1,11 +1,16 @@
-# Reliability Step 2
+# Reliability Step 1
 
-Adds:
-- Undo Last Reward button
-- Saving state
-- Reward buttons disabled while saving
-- Clearer saved/error messages
-- Safer reward saving flow
-- Prevents rapid double-taps from creating duplicate rewards
+This version improves reliability.
 
-No new Supabase SQL required beyond Reliability Step 1.
+## Fixed / Improved
+
+- Competition scoring now uses a Supabase RPC function
+- Individual rewards update competition scores
+- Negative rewards subtract from competition scores
+- Team rewards update competition scores by total team points
+- Better error message if competition score update fails
+- Reward messages show "Saved" confirmation
+
+## Important
+
+Run the updated `supabase/schema.sql` in Supabase SQL Editor before testing competition scores.
