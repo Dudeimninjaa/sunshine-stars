@@ -273,6 +273,20 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     await loadCompetitions();
   }
 
+  async function deleteCompetition(competitionId: string, competitionName: string) {
+    const confirmed = window.confirm(`Delete competition "${competitionName}"? This removes the competition leaderboard.`);
+    if (!confirmed) return;
+
+    const { error } = await supabase.from("competitions").delete().eq("id", competitionId);
+    if (error) {
+      setMessage(`Competition was not deleted: ${error.message}`);
+      return;
+    }
+
+    setMessage(`Deleted competition: ${competitionName}`);
+    await loadCompetitions();
+  }
+
   async function joinCompetition(competitionId: string) {
     if (!activeClassroom) {
       setMessage("Create or select a classroom first.");
@@ -590,6 +604,78 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     await loadClassroomData(classroomId);
   }
 
+  async function giveEveryoneReward(category: Category) {
+    if (!students.length || !goal || !sessionUserId) {
+      setMessage("Add students first.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Give ${category.points > 0 ? "+" : ""}${category.points} point(s) for "${category.name}" to everyone?`);
+    if (!confirmed) return;
+
+    const totalDelta = category.points * students.length;
+
+    const { error: rewardError } = await supabase.from("rewards").insert(
+      students.map((student) => ({
+        classroom_id: classroomId,
+        student_id: student.id,
+        teacher_id: sessionUserId,
+        category_id: category.id,
+        category_name: `Everyone: ${category.name}`,
+        points: category.points,
+      }))
+    );
+
+    if (rewardError) {
+      setMessage(`Everyone reward did not save: ${rewardError.message}`);
+      return;
+    }
+
+    for (const student of students) {
+      const { error: studentError } = await supabase
+        .from("students")
+        .update({ total_points: Math.max(0, student.total_points + category.points) })
+        .eq("id", student.id);
+
+      if (studentError) {
+        setMessage(`Some student points did not update: ${studentError.message}`);
+        return;
+      }
+    }
+
+    if (goal) {
+      const { error: goalError } = await supabase
+        .from("class_goals")
+        .update({ current_points: Math.max(0, goal.current_points + totalDelta) })
+        .eq("id", goal.id);
+
+      if (goalError) {
+        setMessage(`Class goal did not update: ${goalError.message}`);
+        return;
+      }
+    }
+
+    await updateCompetitionScores(totalDelta);
+
+    if (category.points < 0) {
+      if (typeof showCenterAnimation === "function") showCenterAnimation(`⚠️ ${category.points}`, "negative", `Everyone: ${category.name}`);
+      playSound("negative");
+      if (typeof triggerNegativeFeedback === "function") triggerNegativeFeedback();
+    } else {
+      if (typeof showCenterAnimation === "function") showCenterAnimation(`⭐ +${category.points}`, "positive", `Everyone: ${category.name}`);
+      launchSparkles();
+      playSound("positive");
+      confetti({ particleCount: 75, spread: 80, origin: { y: 0.7 } });
+    }
+
+    setMessage(category.points >= 0
+      ? `Saved: Everyone earned ${category.points} point(s) for ${category.name}.`
+      : `Saved: Everyone lost ${Math.abs(category.points)} point(s) for ${category.name}.`
+    );
+
+    await loadClassroomData(classroomId);
+  }
+
   async function giveReward(category: Category) {
     if (!selectedStudent || !goal || !sessionUserId) return;
     const newStudentTotal = Math.max(0, selectedStudent.total_points + category.points);
@@ -763,7 +849,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           )}
 
           {mode === "board" ? (
-            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
+            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} giveEveryoneReward={giveEveryoneReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
             <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
@@ -836,15 +922,20 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                     </div>
 
                     <div className="mt-3">
-                      {joined ? (
-                        <button onClick={() => leaveCompetition(competition.id)} className="rounded-xl bg-red-100 px-3 py-2 font-bold text-red-700">
-                          Leave Competition
+                      <div className="flex flex-wrap gap-2">
+                        {joined ? (
+                          <button onClick={() => leaveCompetition(competition.id)} className="rounded-xl bg-red-100 px-3 py-2 font-bold text-red-700">
+                            Leave Competition
+                          </button>
+                        ) : (
+                          <button onClick={() => joinCompetition(competition.id)} className="rounded-xl bg-indigo-100 px-3 py-2 font-bold text-indigo-700">
+                            Join This Class
+                          </button>
+                        )}
+                        <button onClick={() => deleteCompetition(competition.id, competition.name)} className="rounded-xl bg-slate-900 px-3 py-2 font-bold text-white">
+                          Delete Competition
                         </button>
-                      ) : (
-                        <button onClick={() => joinCompetition(competition.id)} className="rounded-xl bg-indigo-100 px-3 py-2 font-bold text-indigo-700">
-                          Join This Class
-                        </button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -870,6 +961,7 @@ function BoardMode({
   popStudentId,
   negativePopStudentId,
   giveReward,
+  giveEveryoneReward,
   quickTakeAwayPoint,
   teams,
   selectedTeamId,
@@ -887,6 +979,7 @@ function BoardMode({
   popStudentId: string;
   negativePopStudentId: string;
   giveReward: (category: Category) => void;
+  giveEveryoneReward: (category: Category) => void;
   quickTakeAwayPoint: () => void;
   teams: Team[];
   selectedTeamId: string;
@@ -979,6 +1072,21 @@ function BoardMode({
                 </div>
               </button>
             ))}
+          </div>
+
+          <div className="mt-5 rounded-2xl bg-white p-4 shadow">
+            <h3 className="text-xl font-black mb-2">Give Everyone</h3>
+            <div className="grid grid-cols-1 gap-2">
+              {categories.map((category) => (
+                <button
+                  key={`everyone-${category.id}`}
+                  onClick={() => giveEveryoneReward(category)}
+                  className={`rounded-2xl p-3 font-black text-left ${category.points < 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
+                >
+                  Everyone {category.points > 0 ? "+" : ""}{category.points}: {category.name}
+                </button>
+              ))}
+            </div>
           </div>
 
           {selectedTeamId && (

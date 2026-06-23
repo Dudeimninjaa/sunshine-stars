@@ -1,10 +1,12 @@
-Custom sound files added.
+# Custom Sounds Wired
 
-Files:
-positive_reward.mp3
-negative_point.mp3
-goal_completed.mp3
-captain_picker.mp3
-competition_win.mp3
+This version uses the audio files in `public/sounds`.
 
-Next code step: wire these files into the app audio handlers.
+Events:
+- positive reward: positive_reward.mp3
+- negative point: negative_point.mp3
+- goal completed: goal_completed.mp3
+- captain picker: captain_picker.mp3
+- competition score update: competition_win.mp3
+
+Setup Mode includes volume control and test buttons.

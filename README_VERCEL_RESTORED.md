@@ -1,1 +1,1 @@
-Vercel restored working package. package.json is valid JSON, vercel.json removed, package-lock removed. Upload root contents to GitHub.
+Competition scoring reconnected to individual rewards and team rewards. Run latest supabase/schema.sql if scores still do not update.
