@@ -389,6 +389,57 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   }
 
 
+
+  async function resetClassPoints() {
+    if (!classroomId || !goal) return;
+
+    const confirmed = window.confirm("Reset all student points and class goal progress to 0? This cannot be undone.");
+    if (!confirmed) return;
+
+    const { error: studentError } = await supabase
+      .from("students")
+      .update({ total_points: 0 })
+      .eq("classroom_id", classroomId);
+
+    if (studentError) {
+      setMessage(`Could not reset student points: ${studentError.message}`);
+      return;
+    }
+
+    const { error: goalError } = await supabase
+      .from("class_goals")
+      .update({ current_points: 0 })
+      .eq("id", goal.id);
+
+    if (goalError) {
+      setMessage(`Could not reset class goal: ${goalError.message}`);
+      return;
+    }
+
+    setMessage("Student points and class goal were reset to 0.");
+    await loadClassroomData(classroomId);
+  }
+
+  async function resetCompetitionScoresForClass() {
+    if (!classroomId) return;
+
+    const confirmed = window.confirm("Reset this class's competition scores to 0 for every competition it joined?");
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("competition_scores")
+      .update({ score: 0, updated_at: new Date().toISOString() })
+      .eq("classroom_id", classroomId);
+
+    if (error) {
+      setMessage(`Could not reset competition scores: ${error.message}`);
+      return;
+    }
+
+    setMessage("Competition scores for this class were reset to 0.");
+    await loadCompetitions();
+  }
+
   async function deleteCurrentClassroom() {
     if (!activeClassroom) return;
 
@@ -820,7 +871,31 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                 </div>
               )}
 
+              
               {activeClassroom && (
+                <div className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+                  <div className="text-lg font-black text-amber-800 mb-2">Reset Tools</div>
+                  <p className="text-sm text-amber-800 mb-3">
+                    Use these when starting a new day, week, or competition test.
+                  </p>
+                  <div className="grid md:grid-cols-2 gap-2">
+                    <button
+                      onClick={props.resetClassPoints}
+                      className="rounded-2xl bg-amber-500 px-5 py-4 font-black text-white shadow touch-button"
+                    >
+                      Reset Points
+                    </button>
+                    <button
+                      onClick={props.resetCompetitionScoresForClass}
+                      className="rounded-2xl bg-indigo-600 px-5 py-4 font-black text-white shadow touch-button"
+                    >
+                      Reset Competition Score
+                    </button>
+                  </div>
+                </div>
+              )}
+
+{activeClassroom && (
                 <details className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-4">
                   <summary className="cursor-pointer text-lg font-black text-red-700">Delete Classroom</summary>
                   <p className="mt-3 text-sm text-red-700">
@@ -851,7 +926,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           {mode === "board" ? (
             <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} giveEveryoneReward={giveEveryoneReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
-            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
+            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} resetClassPoints={resetClassPoints} resetCompetitionScoresForClass={resetCompetitionScoresForClass} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
             <ReportsMode students={students} rewards={rewards} />
           )}
@@ -1114,7 +1189,7 @@ function BoardMode({
       </div>
 
       <section className="grid xl:grid-cols-3 gap-4">
-        <div className="rounded-[2rem] bg-white p-5 shadow-xl">
+        <div className="ui-polish-card rounded-[2rem] bg-white p-5 shadow-xl">
           <h2 className="text-2xl font-black mb-3 flex items-center gap-2"><Crown /> Captains</h2>
           <button
             onClick={pickClassCaptains}
@@ -1125,7 +1200,7 @@ function BoardMode({
           <p className="text-xs text-slate-500 mt-2">No-repeat mode is on.</p>
         </div>
 
-        <div className="rounded-[2rem] bg-white p-5 shadow-xl xl:col-span-2">
+        <div className="ui-polish-card rounded-[2rem] bg-white p-5 shadow-xl xl:col-span-2">
           <h2 className="text-2xl font-black mb-3 flex items-center gap-2"><Trophy /> Team Standings</h2>
           <div className="grid md:grid-cols-2 gap-2">
             {teams.map((team) => {
@@ -1247,7 +1322,7 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; resetClassPoints: () => void; resetCompetitionScoresForClass: () => void; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
@@ -1296,7 +1371,7 @@ function SetupMode(props: {
             </div>
           ))}
         </div>
-        <div className="rounded-[2rem] bg-white p-4 shadow">
+        <div className="ui-polish-card rounded-[2rem] bg-white p-4 shadow">
           <h3 className="text-2xl font-black mb-3">Board Settings</h3>
           <label className="block font-bold mb-1">Theme</label>
           <select className="w-full rounded-2xl border p-3 mb-3" value={props.activeClassroom?.theme || "Ninja Academy"} onChange={(e) => props.updateClassroomSetting("theme", e.target.value)}>{Object.keys(THEMES).map((name) => <option key={name} value={name}>{THEMES[name].emoji} {name}</option>)}</select>

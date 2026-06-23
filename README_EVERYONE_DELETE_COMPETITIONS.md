@@ -1,7 +1,1 @@
-const config = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-};
-export default config;
+Added Give Everyone and Delete Competition. Run schema.sql if Delete Competition permission fails.

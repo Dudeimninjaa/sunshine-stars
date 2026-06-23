@@ -1,1 +1,1 @@
-Fixed reward animations to display centered on the whole screen above the board UI.
+Added reset points, reset competition score, and UI polish. No new SQL usually required.
