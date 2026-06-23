@@ -324,14 +324,41 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   async function updateCompetitionScores(delta: number) {
     if (!classroomId || delta === 0) return;
 
-    const { error } = await supabase.rpc("add_competition_points_for_classroom", {
-      target_classroom_id: classroomId,
-      points_delta: delta,
-    });
+    const { data: joined, error: joinedError } = await supabase
+      .from("competition_classrooms")
+      .select("*")
+      .eq("classroom_id", classroomId);
 
-    if (error) {
-      setMessage(`Competition score did not update: ${error.message}`);
+    if (joinedError) {
+      setMessage(joinedError.message);
       return;
+    }
+
+    if (!joined || joined.length === 0) return;
+
+    for (const entry of joined) {
+      const { data: existingScore } = await supabase
+        .from("competition_scores")
+        .select("*")
+        .eq("competition_id", entry.competition_id)
+        .eq("classroom_id", classroomId)
+        .maybeSingle();
+
+      const nextScore = Math.max(0, (existingScore?.score ?? 0) + delta);
+
+      const { error: scoreError } = await supabase
+        .from("competition_scores")
+        .upsert({
+          competition_id: entry.competition_id,
+          classroom_id: classroomId,
+          score: nextScore,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "competition_id,classroom_id" });
+
+      if (scoreError) {
+        setMessage(scoreError.message);
+        return;
+      }
     }
 
     await loadCompetitions();
@@ -577,7 +604,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     } else {
       setPopStudentId(selectedStudent.id);
     }
-    setMessage(category.points >= 0 ? `Saved: ${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `Saved: ${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
+    setMessage(category.points >= 0 ? `${selectedStudent.name} earned ${category.points} point(s) for ${category.name}!` : `${selectedStudent.name} lost ${Math.abs(category.points)} point(s) for ${category.name}.`);
     if (category.points > 0) {
       
       playSound("positive");

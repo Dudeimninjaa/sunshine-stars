@@ -1,1 +1,10 @@
-Competition scoring reconnected to individual rewards and team rewards. Run latest supabase/schema.sql if scores still do not update.
+Custom sound files added.
+
+Files:
+positive_reward.mp3
+negative_point.mp3
+goal_completed.mp3
+captain_picker.mp3
+competition_win.mp3
+
+Next code step: wire these files into the app audio handlers.

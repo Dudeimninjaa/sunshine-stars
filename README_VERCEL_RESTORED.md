@@ -1,1 +1,1 @@
-Fixed reward animations to display centered on the whole screen above the board UI.
+Vercel restored working package. package.json is valid JSON, vercel.json removed, package-lock removed. Upload root contents to GitHub.
