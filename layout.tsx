@@ -114,3 +114,41 @@ body {
     opacity: 0;
   }
 }
+
+
+/* UI Polish: smartboard-friendly controls */
+.ui-polish-card {
+  border-radius: 2rem;
+  border: 1px solid rgba(255,255,255,.72);
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 18px 45px rgba(15,23,42,.12);
+  backdrop-filter: blur(12px);
+}
+
+.ui-polish-button {
+  border-radius: 1.5rem;
+  min-height: 64px;
+  font-weight: 900;
+  box-shadow: 0 12px 28px rgba(15,23,42,.14);
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+}
+
+.ui-polish-button:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 18px 38px rgba(15,23,42,.18);
+}
+
+.ui-polish-button:active {
+  transform: translateY(1px) scale(.98);
+  filter: brightness(.96);
+}
+
+.reward-side-panel {
+  border: 3px solid rgba(255,255,255,.85);
+  box-shadow: 0 24px 70px rgba(15,23,42,.18);
+}
+
+.touch-button {
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}

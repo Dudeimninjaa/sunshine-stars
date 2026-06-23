@@ -1,1 +1,1 @@
-Board Mode redesign: student cards left, reward buttons sticky right, team/captain/class info at bottom. No new Supabase SQL required.
+Competition scoring reconnected to individual rewards and team rewards. Run latest supabase/schema.sql if scores still do not update.
