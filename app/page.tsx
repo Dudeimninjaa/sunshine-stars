@@ -94,8 +94,8 @@ function getWeeklyStudentPoints(studentId: string, rewards: RewardLog[] = []) {
     .reduce((sum, reward) => sum + reward.points, 0);
 }
 
-function getWeeklyStickerInfo(studentId: string, rewards: RewardLog[] = []) {
-  const points = Math.max(0, getWeeklyStudentPoints(studentId, rewards));
+function getWeeklyStickerInfo(student: Student) {
+  const points = Math.max(0, student.total_points || 0);
   const stickers = Math.floor(points / WEEKLY_STICKER_TARGET);
   const progress = points % WEEKLY_STICKER_TARGET;
 
@@ -165,7 +165,7 @@ export default function HomePage() {
   function checkStickerMilestone(student: Student, pointsAdded: number) {
     if (pointsAdded <= 0) return;
 
-    const before = getWeeklyStudentPoints(student.id, rewards || []);
+    const before = Math.max(0, student.total_points || 0);
     const after = before + pointsAdded;
 
     if (Math.floor(before / WEEKLY_STICKER_TARGET) < Math.floor(after / WEEKLY_STICKER_TARGET)) {
@@ -175,6 +175,7 @@ export default function HomePage() {
       setTimeout(() => setStickerCelebration(null), 2600);
     }
   }
+
 
   function triggerNegativeFeedback() {
     document.body.classList.add("shake-board");
@@ -1055,12 +1056,12 @@ function BoardMode({
                   <Star className="inline" /> {student.total_points}
                 </div>
                 {(() => {
-                  const weekly = getWeeklyStickerInfo(student.id, rewards || []);
+                  const weekly = getWeeklyStickerInfo(student);
                   const width = Math.min(100, Math.round((weekly.progress / WEEKLY_STICKER_TARGET) * 100));
                   return (
                     <div className="mt-3 rounded-2xl bg-slate-100 p-2">
                       <div className="flex items-center justify-between text-xs md:text-sm font-black text-slate-600">
-                        <span>Weekly Goal</span>
+                        <span>Sticker Goal</span>
                         <span>{weekly.progress}/{WEEKLY_STICKER_TARGET}</span>
                       </div>
                       <div className="mt-1 h-3 rounded-full bg-white overflow-hidden">
