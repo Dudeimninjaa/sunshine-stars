@@ -18,7 +18,7 @@ type RewardLog = {
   created_at: string;
 };
 
-type Competition = {
+type Archived = {
   id: string;
   name: string;
   grade_name: string;
@@ -27,7 +27,7 @@ type Competition = {
   created_at: string;
 };
 
-type CompetitionClassroom = {
+type ArchivedClassroom = {
   id: string;
   competition_id: string;
   classroom_id: string;
@@ -35,7 +35,7 @@ type CompetitionClassroom = {
   joined_at: string;
 };
 
-type CompetitionScore = {
+type ArchivedScore = {
   id: string;
   competition_id: string;
   classroom_id: string;
@@ -93,9 +93,9 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [goal, setGoal] = useState<ClassGoal | null>(null);
   const [rewards, setRewards] = useState<RewardLog[]>([]);
-  const [competitions, setCompetitions] = useState<Competition[]>([]);
-  const [competitionClassrooms, setCompetitionClassrooms] = useState<CompetitionClassroom[]>([]);
-  const [competitionScores, setCompetitionScores] = useState<CompetitionScore[]>([]);
+  const [competitions, setArchived] = useState<Archived[]>([]);
+  const [competitionClassrooms, setArchivedClassrooms] = useState<ArchivedClassroom[]>([]);
+  const [competitionScores, setArchivedScores] = useState<ArchivedScore[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [captainHistory, setCaptainHistory] = useState<CaptainHistory[]>([]);
 
@@ -113,8 +113,8 @@ export default function HomePage() {
   const [soundVolume, setSoundVolume] = useState(0.8);
 
   const [newClassName, setNewClassName] = useState("Sunshine Class");
-  const [newCompetitionName, setNewCompetitionName] = useState("");
-  const [newCompetitionGrade, setNewCompetitionGrade] = useState("");
+  const [newArchivedName, setNewArchivedName] = useState("");
+  const [newArchivedGrade, setNewArchivedGrade] = useState("");
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [newStudentName, setNewStudentName] = useState("");
@@ -137,7 +137,7 @@ export default function HomePage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { if (sessionUserId) { loadClassrooms(); loadCompetitions(); } }, [sessionUserId]);
+  useEffect(() => { if (sessionUserId) { loadClassrooms(); loadArchived(); } }, [sessionUserId]);
   useEffect(() => { if (classroomId) loadClassroomData(classroomId); }, [classroomId]);
 
   
@@ -227,7 +227,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   }
 
 
-  async function loadCompetitions() {
+  async function loadArchived() {
     const [compRes, classRes, scoreRes] = await Promise.all([
       supabase.from("competitions").select("*").eq("is_active", true).order("created_at", { ascending: false }),
       supabase.from("competition_classrooms").select("*"),
@@ -238,19 +238,19 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     if (classRes.error) setMessage(classRes.error.message);
     if (scoreRes.error) setMessage(scoreRes.error.message);
 
-    setCompetitions((compRes.data ?? []) as Competition[]);
-    setCompetitionClassrooms((classRes.data ?? []) as CompetitionClassroom[]);
-    setCompetitionScores((scoreRes.data ?? []) as CompetitionScore[]);
+    setArchived((compRes.data ?? []) as Archived[]);
+    setArchivedClassrooms((classRes.data ?? []) as ArchivedClassroom[]);
+    setArchivedScores((scoreRes.data ?? []) as ArchivedScore[]);
   }
 
-  async function createCompetition() {
-    if (!sessionUserId || !newCompetitionName.trim()) return;
+  async function createArchived() {
+    if (!sessionUserId || !newArchivedName.trim()) return;
 
     const { data, error } = await supabase
       .from("competitions")
       .insert({
-        name: newCompetitionName.trim(),
-        grade_name: newCompetitionGrade.trim(),
+        name: newArchivedName.trim(),
+        grade_name: newArchivedGrade.trim(),
         created_by: sessionUserId,
         is_active: true,
       })
@@ -259,35 +259,35 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
 
     if (error) return setMessage(error.message);
 
-    setNewCompetitionName("");
-    setNewCompetitionGrade("");
-    setMessage("Competition created.");
+    setNewArchivedName("");
+    setNewArchivedGrade("");
+    setMessage("Archived created.");
 
     if (data && classroomId) {
-      await joinCompetition(data.id);
+      await joinArchived(data.id);
     }
 
     if (delta > 0) {
       playSound("competition");
     }
-    await loadCompetitions();
+    await loadArchived();
   }
 
-  async function deleteCompetition(competitionId: string, competitionName: string) {
+  async function deleteArchived(competitionId: string, competitionName: string) {
     const confirmed = window.confirm(`Delete competition "${competitionName}"? This removes the competition leaderboard.`);
     if (!confirmed) return;
 
     const { error } = await supabase.from("competitions").delete().eq("id", competitionId);
     if (error) {
-      setMessage(`Competition was not deleted: ${error.message}`);
+      setMessage(`Archived was not deleted: ${error.message}`);
       return;
     }
 
     setMessage(`Deleted competition: ${competitionName}`);
-    await loadCompetitions();
+    await loadArchived();
   }
 
-  async function joinCompetition(competitionId: string) {
+  async function joinArchived(competitionId: string) {
     if (!activeClassroom) {
       setMessage("Create or select a classroom first.");
       return;
@@ -311,10 +311,10 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     if (scoreError) return setMessage(scoreError.message);
 
     setMessage("Class joined the competition.");
-    await loadCompetitions();
+    await loadArchived();
   }
 
-  async function leaveCompetition(competitionId: string) {
+  async function leaveArchived(competitionId: string) {
     if (!classroomId) return;
 
     await supabase
@@ -332,10 +332,10 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     if (error) return setMessage(error.message);
 
     setMessage("Class removed from competition.");
-    await loadCompetitions();
+    await loadArchived();
   }
 
-  async function updateCompetitionScores(delta: number) {
+  async function updateArchivedScores(delta: number) {
     if (!classroomId || delta === 0) return;
 
     const { data: joined, error: joinedError } = await supabase
@@ -375,7 +375,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
       }
     }
 
-    await loadCompetitions();
+    await loadArchived();
   }
 
   async function createClassroom() {
@@ -420,7 +420,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     await loadClassroomData(classroomId);
   }
 
-  async function resetCompetitionScoresForClass() {
+  async function resetArchivedScoresForClass() {
     if (!classroomId) return;
 
     const confirmed = window.confirm("Reset this class's competition scores to 0 for every competition it joined?");
@@ -436,8 +436,8 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
       return;
     }
 
-    setMessage("Competition scores for this class were reset to 0.");
-    await loadCompetitions();
+    setMessage("Archived scores for this class were reset to 0.");
+    await loadArchived();
   }
 
   async function deleteCurrentClassroom() {
@@ -590,8 +590,8 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
 
     await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
-    await updateCompetitionScores(-1);
-    await updateCompetitionScores(category.points);
+    await updateArchivedScores(-1);
+    await updateArchivedScores(category.points);
 
     setNegativePopStudentId(selectedStudent.id);
     playSound("negative"); triggerNegativeFeedback();
@@ -706,7 +706,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
       }
     }
 
-    await updateCompetitionScores(totalDelta);
+    await updateArchivedScores(totalDelta);
 
     if (category.points < 0) {
       if (typeof showCenterAnimation === "function") showCenterAnimation(`⚠️ ${category.points}`, "negative", `Everyone: ${category.name}`);
@@ -886,10 +886,10 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                       Reset Points
                     </button>
                     <button
-                      onClick={resetCompetitionScoresForClass}
+                      onClick={resetArchivedScoresForClass}
                       className="rounded-2xl bg-indigo-600 px-5 py-4 font-black text-white shadow touch-button"
                     >
-                      Reset Competition Score
+                      Reset Archived Score
                     </button>
                   </div>
                 </div>
@@ -926,7 +926,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           {mode === "board" ? (
             <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} giveEveryoneReward={giveEveryoneReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
-            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} resetClassPoints={resetClassPoints} resetCompetitionScoresForClass={resetCompetitionScoresForClass} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
+            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} resetClassPoints={resetClassPoints} resetArchivedScoresForClass={resetArchivedScoresForClass} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
             <ReportsMode students={students} rewards={rewards} />
           )}
@@ -945,23 +945,23 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           ) : <p>No goal yet.</p>}
           
           <div className="mt-5 rounded-[2rem] bg-indigo-50 p-4 border border-indigo-100">
-            <h2 className="text-2xl font-black text-indigo-700 mb-3">🏆 Class Competitions</h2>
+            <h2 className="text-2xl font-black text-indigo-700 mb-3">🏆 Class Archived</h2>
 
             <div className="grid gap-2 mb-4">
               <input
                 className="rounded-2xl border p-3"
-                placeholder="Competition name"
-                value={newCompetitionName}
-                onChange={(e) => setNewCompetitionName(e.target.value)}
+                placeholder="Archived name"
+                value={newArchivedName}
+                onChange={(e) => setNewArchivedName(e.target.value)}
               />
               <input
                 className="rounded-2xl border p-3"
                 placeholder="Grade / group, optional"
-                value={newCompetitionGrade}
-                onChange={(e) => setNewCompetitionGrade(e.target.value)}
+                value={newArchivedGrade}
+                onChange={(e) => setNewArchivedGrade(e.target.value)}
               />
-              <button onClick={createCompetition} className="rounded-2xl bg-indigo-600 p-3 font-black text-white">
-                Create Competition
+              <button onClick={createArchived} className="rounded-2xl bg-indigo-600 p-3 font-black text-white">
+                Create Archived
               </button>
             </div>
 
@@ -999,16 +999,16 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                     <div className="mt-3">
                       <div className="flex flex-wrap gap-2">
                         {joined ? (
-                          <button onClick={() => leaveCompetition(competition.id)} className="rounded-xl bg-red-100 px-3 py-2 font-bold text-red-700">
-                            Leave Competition
+                          <button onClick={() => leaveArchived(competition.id)} className="rounded-xl bg-red-100 px-3 py-2 font-bold text-red-700">
+                            Leave Archived
                           </button>
                         ) : (
-                          <button onClick={() => joinCompetition(competition.id)} className="rounded-xl bg-indigo-100 px-3 py-2 font-bold text-indigo-700">
+                          <button onClick={() => joinArchived(competition.id)} className="rounded-xl bg-indigo-100 px-3 py-2 font-bold text-indigo-700">
                             Join This Class
                           </button>
                         )}
-                        <button onClick={() => deleteCompetition(competition.id, competition.name)} className="rounded-xl bg-slate-900 px-3 py-2 font-bold text-white">
-                          Delete Competition
+                        <button onClick={() => deleteArchived(competition.id, competition.name)} className="rounded-xl bg-slate-900 px-3 py-2 font-bold text-white">
+                          Delete Archived
                         </button>
                       </div>
                     </div>
@@ -1322,7 +1322,7 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; resetClassPoints: () => void; resetCompetitionScoresForClass: () => void; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; resetClassPoints: () => void; resetArchivedScoresForClass: () => void; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
@@ -1394,7 +1394,7 @@ function SetupMode(props: {
               <button onClick={() => props.playSound("negative")} className="rounded-xl bg-red-100 p-3 font-bold text-red-700">Test Negative</button>
               <button onClick={() => props.playSound("goal")} className="rounded-xl bg-green-100 p-3 font-bold text-green-700">Test Goal</button>
               <button onClick={() => props.playSound("captain")} className="rounded-xl bg-purple-100 p-3 font-bold text-purple-700">Test Captain</button>
-              <button onClick={() => props.playSound("competition")} className="col-span-2 rounded-xl bg-indigo-100 p-3 font-bold text-indigo-700">Test Competition</button>
+              <button onClick={() => props.playSound("competition")} className="col-span-2 rounded-xl bg-indigo-100 p-3 font-bold text-indigo-700">Test Archived</button>
             </div>
           </div>
           <button onClick={() => props.updateClassroomSetting("kiosk_mode", true)} className="w-full rounded-2xl bg-orange-500 text-white p-4 font-bold flex justify-center gap-2 items-center touch-button"><Maximize /> Open Kiosk Mode</button>
