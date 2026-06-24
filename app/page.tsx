@@ -85,7 +85,7 @@ const THEMES: Record<string, { bg: string; panel: string; accent: string; accent
 };
 
 
-function getWeeklyStudentPoints(studentId: string, rewards: RewardLog[]) {
+function getWeeklyStudentPoints(studentId: string, rewards: RewardLog[] = []) {
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
 
@@ -94,7 +94,7 @@ function getWeeklyStudentPoints(studentId: string, rewards: RewardLog[]) {
     .reduce((sum, reward) => sum + reward.points, 0);
 }
 
-function getWeeklyStickerInfo(studentId: string, rewards: RewardLog[]) {
+function getWeeklyStickerInfo(studentId: string, rewards: RewardLog[] = []) {
   const points = Math.max(0, getWeeklyStudentPoints(studentId, rewards));
   const stickers = Math.floor(points / WEEKLY_STICKER_TARGET);
   const progress = points % WEEKLY_STICKER_TARGET;
@@ -165,7 +165,7 @@ export default function HomePage() {
   function checkStickerMilestone(student: Student, pointsAdded: number) {
     if (pointsAdded <= 0) return;
 
-    const before = getWeeklyStudentPoints(student.id, rewards);
+    const before = getWeeklyStudentPoints(student.id, rewards || []);
     const after = before + pointsAdded;
 
     if (Math.floor(before / WEEKLY_STICKER_TARGET) < Math.floor(after / WEEKLY_STICKER_TARGET)) {
@@ -992,7 +992,7 @@ function BoardMode({
   giveTeamReward,
   pickClassCaptains,
   todaysCaptainIds,
-  rewards,
+  rewards = [],
   theme,
   kioskMode,
 }: {
@@ -1011,7 +1011,7 @@ function BoardMode({
   giveTeamReward: (category: Category) => void;
   pickClassCaptains: () => void;
   todaysCaptainIds: string[];
-  rewards: RewardLog[];
+  rewards?: RewardLog[];
   theme: any;
   kioskMode: boolean;
 }) {
@@ -1055,7 +1055,7 @@ function BoardMode({
                   <Star className="inline" /> {student.total_points}
                 </div>
                 {(() => {
-                  const weekly = getWeeklyStickerInfo(student.id, rewards);
+                  const weekly = getWeeklyStickerInfo(student.id, rewards || []);
                   const width = Math.min(100, Math.round((weekly.progress / WEEKLY_STICKER_TARGET) * 100));
                   return (
                     <div className="mt-3 rounded-2xl bg-slate-100 p-2">
