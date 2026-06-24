@@ -880,13 +880,13 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                   </p>
                   <div className="grid md:grid-cols-2 gap-2">
                     <button
-                      onClick={props.resetClassPoints}
+                      onClick={resetClassPoints}
                       className="rounded-2xl bg-amber-500 px-5 py-4 font-black text-white shadow touch-button"
                     >
                       Reset Points
                     </button>
                     <button
-                      onClick={props.resetCompetitionScoresForClass}
+                      onClick={resetCompetitionScoresForClass}
                       className="rounded-2xl bg-indigo-600 px-5 py-4 font-black text-white shadow touch-button"
                     >
                       Reset Competition Score
@@ -1322,7 +1322,7 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; resetClassPoints?: () => void; resetCompetitionScoresForClass?: () => void; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; resetClassPoints: () => void; resetCompetitionScoresForClass: () => void; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
