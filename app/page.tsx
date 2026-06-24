@@ -945,7 +945,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           ) : <p>No goal yet.</p>}
           
           <div className="mt-5 rounded-[2rem] bg-indigo-50 p-4 border border-indigo-100">
-            <h2 className="text-2xl font-black text-indigo-700 mb-3">🏆 Class Archived</h2>
+            <h2 className="text-2xl font-black text-indigo-700 mb-3">Hidden</h2>
 
             <div className="grid gap-2 mb-4">
               <input
