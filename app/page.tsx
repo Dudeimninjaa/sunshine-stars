@@ -49,6 +49,8 @@ const DEFAULT_CATEGORIES = [
   ["Japanese", "あ"], ["Helping Out", "🤝"], ["Teamwork", "👥"],
 ];
 
+const WEEKLY_STICKER_TARGET = 10;
+
 const AVATARS = ["🥷", "🦊", "🐼", "🐯", "🦁", "🐸", "🐵", "🐰", "🦄", "🐲", "⭐", "🌈", "🚀", "🎨", "⚽", "🎵"];
 
 const SOUND_FILES = {
@@ -82,6 +84,24 @@ const THEMES: Record<string, { bg: string; panel: string; accent: string; accent
   "Jungle Safari": { bg: "from-green-900 via-emerald-700 to-lime-500", panel: "bg-white/90", accent: "bg-emerald-600", accentText: "text-emerald-700", soft: "bg-emerald-50", emoji: "🦁", label: "Jungle Safari" },
 };
 
+
+function getWeeklyStudentPoints(studentId: string, rewards: RewardLog[]) {
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  return rewards
+    .filter((reward) => reward.student_id === studentId && new Date(reward.created_at) >= weekAgo)
+    .reduce((sum, reward) => sum + reward.points, 0);
+}
+
+function getWeeklyStickerInfo(studentId: string, rewards: RewardLog[]) {
+  const points = Math.max(0, getWeeklyStudentPoints(studentId, rewards));
+  const stickers = Math.floor(points / WEEKLY_STICKER_TARGET);
+  const progress = points % WEEKLY_STICKER_TARGET;
+
+  return { points, stickers, progress };
+}
+
 export default function HomePage() {
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -107,6 +127,7 @@ export default function HomePage() {
   const [sparkles, setSparkles] = useState<{ id: number; x: number; y: number; emoji: string }[]>([]);
   const [celebration, setCelebration] = useState("");
   const [captainReveal, setCaptainReveal] = useState<Student[]>([]);
+  const [stickerCelebration, setStickerCelebration] = useState<Student | null>(null);
   const [todaysCaptainIds, setTodaysCaptainIds] = useState<string[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [message, setMessage] = useState("");
@@ -140,6 +161,21 @@ export default function HomePage() {
   useEffect(() => { if (classroomId) loadClassroomData(classroomId); }, [classroomId]);
 
   
+
+  function checkStickerMilestone(student: Student, pointsAdded: number) {
+    if (pointsAdded <= 0) return;
+
+    const before = getWeeklyStudentPoints(student.id, rewards);
+    const after = before + pointsAdded;
+
+    if (Math.floor(before / WEEKLY_STICKER_TARGET) < Math.floor(after / WEEKLY_STICKER_TARGET)) {
+      setStickerCelebration(student);
+      playSound("goal");
+      confetti({ particleCount: 220, spread: 120, origin: { y: 0.6 } });
+      setTimeout(() => setStickerCelebration(null), 2600);
+    }
+  }
+
   function triggerNegativeFeedback() {
     document.body.classList.add("shake-board");
     document.body.classList.add("negative-flash");
@@ -692,6 +728,10 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     }
 
 
+    if (category.points > 0) {
+      students.forEach((student) => checkStickerMilestone(student, category.points));
+    }
+
     if (category.points < 0) {
       if (typeof showCenterAnimation === "function") showCenterAnimation(`⚠️ ${category.points}`, "negative", `Everyone: ${category.name}`);
       playSound("negative");
@@ -803,6 +843,20 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           </div>
         </div>
       )}
+      {stickerCelebration && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-6 pointer-events-none">
+          <div className="animate-stickerPop rounded-[3rem] bg-gradient-to-br from-yellow-200 via-orange-200 to-pink-200 p-8 text-center shadow-2xl border-8 border-white max-w-3xl w-full">
+            <div className="text-8xl md:text-9xl mb-3">{stickerCelebration.avatar}</div>
+            <div className="text-5xl md:text-7xl font-black text-orange-600">
+              🎉 {stickerCelebration.name}
+            </div>
+            <div className="mt-3 text-5xl md:text-7xl font-black text-pink-600">
+              GOT A STICKER! ⭐
+            </div>
+          </div>
+        </div>
+      )}
+
       {captainReveal.length > 0 && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-6">
           <div className="animate-bannerPop rounded-[2rem] bg-white p-8 text-center shadow-2xl border-4 border-yellow-300 max-w-2xl w-full">
@@ -938,6 +992,7 @@ function BoardMode({
   giveTeamReward,
   pickClassCaptains,
   todaysCaptainIds,
+  rewards,
   theme,
   kioskMode,
 }: {
@@ -956,6 +1011,7 @@ function BoardMode({
   giveTeamReward: (category: Category) => void;
   pickClassCaptains: () => void;
   todaysCaptainIds: string[];
+  rewards: RewardLog[];
   theme: any;
   kioskMode: boolean;
 }) {
@@ -998,6 +1054,24 @@ function BoardMode({
                 <div className="text-2xl md:text-3xl font-bold text-orange-500 mt-2">
                   <Star className="inline" /> {student.total_points}
                 </div>
+                {(() => {
+                  const weekly = getWeeklyStickerInfo(student.id, rewards);
+                  const width = Math.min(100, Math.round((weekly.progress / WEEKLY_STICKER_TARGET) * 100));
+                  return (
+                    <div className="mt-3 rounded-2xl bg-slate-100 p-2">
+                      <div className="flex items-center justify-between text-xs md:text-sm font-black text-slate-600">
+                        <span>Weekly Goal</span>
+                        <span>{weekly.progress}/{WEEKLY_STICKER_TARGET}</span>
+                      </div>
+                      <div className="mt-1 h-3 rounded-full bg-white overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-yellow-300 to-orange-500 transition-all duration-500" style={{ width: `${width}%` }} />
+                      </div>
+                      <div className="mt-1 text-xs md:text-sm font-black text-pink-600">
+                        ⭐ Stickers: {weekly.stickers}
+                      </div>
+                    </div>
+                  );
+                })()}
               </button>
             ))}
           </div>
