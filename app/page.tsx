@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import confetti from "canvas-confetti";
-import { Plus, Trash2, Settings, MonitorPlay, Users, Star, LogOut, Copy, UserPlus, Volume2, VolumeX, Maximize, Minimize, BarChart3, Activity, Trophy, Crown, Shuffle } from "lucide-react";
+import { Plus, Trash2, Settings, MonitorPlay, Users, Star, LogOut, Volume2, VolumeX, Maximize, Minimize, BarChart3, Activity, Trophy, Crown, Shuffle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "@/lib/supabase";
 import type { Category, ClassGoal, Classroom, Student, Team, CaptainHistory } from "@/lib/types";
@@ -116,7 +116,6 @@ export default function HomePage() {
   const [newArchivedName, setNewArchivedName] = useState("");
   const [newArchivedGrade, setNewArchivedGrade] = useState("");
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentAvatar, setNewStudentAvatar] = useState("🥷");
   const [newTeamName, setNewTeamName] = useState("");
@@ -469,19 +468,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     await loadClassrooms();
   }
 
-  async function joinClassroom() {
-    if (!joinCode.trim()) return;
-    const { data, error } = await supabase.rpc("join_classroom_by_invite", { code: joinCode.trim() });
-    if (error) return setMessage(error.message);
-    setJoinCode(""); setMessage("Joined classroom successfully."); await loadClassrooms();
-    if (data) setClassroomId(data as string);
-  }
 
-  async function copyInviteCode() {
-    if (!activeClassroom?.invite_code) return;
-    await navigator.clipboard.writeText(activeClassroom.invite_code);
-    setMessage("Invite code copied.");
-  }
 
   async function loadClassroomData(id: string) {
     const [studentsRes, categoriesRes, goalsRes, rewardsRes, teamsRes, captainsRes] = await Promise.all([
@@ -857,16 +844,8 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                 <div className="flex flex-wrap gap-2">
                   <input className="rounded-2xl border p-3" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} />
                   <button onClick={createClassroom} className="rounded-2xl bg-green-500 text-white px-4 font-bold flex gap-2 items-center touch-button"><Plus /> Class</button>
-                  <input className="rounded-2xl border p-3 uppercase" placeholder="Invite code" value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} />
-                  <button onClick={joinClassroom} className="rounded-2xl bg-purple-500 text-white px-4 font-bold flex gap-2 items-center touch-button"><UserPlus /> Join</button>
                 </div>
               </div>
-              {activeClassroom?.invite_code && (
-                <div className="mb-4 rounded-2xl bg-purple-50 border border-purple-200 p-4 flex flex-wrap items-center justify-between gap-3">
-                  <div><div className="text-sm font-bold text-purple-700">Classroom Invite Code</div><div className="text-3xl font-black tracking-widest text-purple-900">{activeClassroom.invite_code}</div><div className="text-slate-600 text-sm">Give this code to another teacher so they can join this classroom.</div></div>
-                  <button onClick={copyInviteCode} className="rounded-2xl bg-purple-600 text-white px-4 py-3 font-bold flex gap-2 items-center touch-button"><Copy /> Copy</button>
-                </div>
-              )}
 
               
               {activeClassroom && (
