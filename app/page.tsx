@@ -137,7 +137,7 @@ export default function HomePage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { if (sessionUserId) { loadClassrooms(); loadArchived(); } }, [sessionUserId]);
+  useEffect(() => { if (sessionUserId) { loadClassrooms(); } }, [sessionUserId]);
   useEffect(() => { if (classroomId) loadClassroomData(classroomId); }, [classroomId]);
 
   
@@ -590,8 +590,6 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
 
     await supabase.from("students").update({ total_points: newStudentTotal }).eq("id", selectedStudent.id);
     await supabase.from("class_goals").update({ current_points: newGoalTotal }).eq("id", goal.id);
-    await updateArchivedScores(-1);
-    await updateArchivedScores(category.points);
 
     setNegativePopStudentId(selectedStudent.id);
     playSound("negative"); triggerNegativeFeedback();
@@ -706,7 +704,6 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
       }
     }
 
-    await updateArchivedScores(totalDelta);
 
     if (category.points < 0) {
       if (typeof showCenterAnimation === "function") showCenterAnimation(`⚠️ ${category.points}`, "negative", `Everyone: ${category.name}`);
@@ -878,19 +875,14 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                   <p className="text-sm text-amber-800 mb-3">
                     Use these when starting a new day, week, or competition test.
                   </p>
-                  <div className="grid md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2">
                     <button
                       onClick={resetClassPoints}
                       className="rounded-2xl bg-amber-500 px-5 py-4 font-black text-white shadow touch-button"
                     >
                       Reset Points
                     </button>
-                    <button
-                      onClick={resetArchivedScoresForClass}
-                      className="rounded-2xl bg-indigo-600 px-5 py-4 font-black text-white shadow touch-button"
-                    >
-                      Reset Archived Score
-                    </button>
+                    
                   </div>
                 </div>
               )}
@@ -944,83 +936,6 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
             </>
           ) : <p>No goal yet.</p>}
           
-          <div className="mt-5 rounded-[2rem] bg-indigo-50 p-4 border border-indigo-100">
-            <h2 className="text-2xl font-black text-indigo-700 mb-3">Hidden</h2>
-
-            <div className="grid gap-2 mb-4">
-              <input
-                className="rounded-2xl border p-3"
-                placeholder="Archived name"
-                value={newArchivedName}
-                onChange={(e) => setNewArchivedName(e.target.value)}
-              />
-              <input
-                className="rounded-2xl border p-3"
-                placeholder="Grade / group, optional"
-                value={newArchivedGrade}
-                onChange={(e) => setNewArchivedGrade(e.target.value)}
-              />
-              <button onClick={createArchived} className="rounded-2xl bg-indigo-600 p-3 font-black text-white">
-                Create Archived
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {competitions.map((competition) => {
-                const joined = competitionClassrooms.some(
-                  (entry) => entry.competition_id === competition.id && entry.classroom_id === classroomId
-                );
-
-                const leaderboard = competitionClassrooms
-                  .filter((entry) => entry.competition_id === competition.id)
-                  .map((entry) => ({
-                    classroom_id: entry.classroom_id,
-                    name: entry.display_name,
-                    score: competitionScores.find(
-                      (score) => score.competition_id === competition.id && score.classroom_id === entry.classroom_id
-                    )?.score ?? 0,
-                  }))
-                  .sort((a, b) => b.score - a.score);
-
-                return (
-                  <div key={competition.id} className="rounded-2xl bg-white p-3 shadow">
-                    <div className="font-black text-lg">{competition.name}</div>
-                    {competition.grade_name && <div className="text-sm text-slate-500">{competition.grade_name}</div>}
-
-                    <div className="mt-3 space-y-1">
-                      {leaderboard.length ? leaderboard.map((row, index) => (
-                        <div key={row.classroom_id} className={`flex justify-between rounded-xl px-3 py-2 ${row.classroom_id === classroomId ? "bg-yellow-100 font-black" : "bg-slate-50"}`}>
-                          <span>{index + 1}. {row.name}</span>
-                          <span>{row.score}</span>
-                        </div>
-                      )) : <p className="text-sm text-slate-500">No classes joined yet.</p>}
-                    </div>
-
-                    <div className="mt-3">
-                      <div className="flex flex-wrap gap-2">
-                        {joined ? (
-                          <button onClick={() => leaveArchived(competition.id)} className="rounded-xl bg-red-100 px-3 py-2 font-bold text-red-700">
-                            Leave Archived
-                          </button>
-                        ) : (
-                          <button onClick={() => joinArchived(competition.id)} className="rounded-xl bg-indigo-100 px-3 py-2 font-bold text-indigo-700">
-                            Join This Class
-                          </button>
-                        )}
-                        <button onClick={() => deleteArchived(competition.id, competition.name)} className="rounded-xl bg-slate-900 px-3 py-2 font-bold text-white">
-                          Delete Archived
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {!competitions.length && <p className="text-sm text-slate-500">No competitions yet.</p>}
-            </div>
-          </div>
-
-
           {message && <div className="mt-5 rounded-2xl bg-yellow-100 p-4 font-bold text-orange-900 animate-pop">{message}</div>}
         </aside>
       </section>
@@ -1394,7 +1309,7 @@ function SetupMode(props: {
               <button onClick={() => props.playSound("negative")} className="rounded-xl bg-red-100 p-3 font-bold text-red-700">Test Negative</button>
               <button onClick={() => props.playSound("goal")} className="rounded-xl bg-green-100 p-3 font-bold text-green-700">Test Goal</button>
               <button onClick={() => props.playSound("captain")} className="rounded-xl bg-purple-100 p-3 font-bold text-purple-700">Test Captain</button>
-              <button onClick={() => props.playSound("competition")} className="col-span-2 rounded-xl bg-indigo-100 p-3 font-bold text-indigo-700">Test Archived</button>
+              <button onClick={() => props.playSound("competition")} className="col-span-2 rounded-xl bg-indigo-100 p-3 font-bold text-indigo-700">Test Competition Sound</button>
             </div>
           </div>
           <button onClick={() => props.updateClassroomSetting("kiosk_mode", true)} className="w-full rounded-2xl bg-orange-500 text-white p-4 font-bold flex justify-center gap-2 items-center touch-button"><Maximize /> Open Kiosk Mode</button>
