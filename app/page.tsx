@@ -138,6 +138,7 @@ export default function HomePage() {
   const [newArchivedGrade, setNewArchivedGrade] = useState("");
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [newStudentName, setNewStudentName] = useState("");
+  const [bulkStudentNames, setBulkStudentNames] = useState("");
   const [newStudentAvatar, setNewStudentAvatar] = useState("🥷");
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamEmoji, setNewTeamEmoji] = useState("🔴");
@@ -568,6 +569,51 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
     setNewStudentName(""); await loadClassroomData(classroomId);
   }
 
+
+  async function importStudentsBulk() {
+    if (!classroomId || !bulkStudentNames.trim()) {
+      setMessage("Paste student names first.");
+      return;
+    }
+
+    const names = bulkStudentNames
+      .split(/[\n,\t]+/)
+      .map((name) => name.trim())
+      .filter(Boolean);
+
+    const uniqueNames = Array.from(new Set(names));
+
+    if (!uniqueNames.length) {
+      setMessage("No valid student names found.");
+      return;
+    }
+
+    if (students.length > 0) {
+      const confirmed = window.confirm(
+        `This class already has ${students.length} students. Add ${uniqueNames.length} more students to this class?`
+      );
+      if (!confirmed) return;
+    }
+
+    const rows = uniqueNames.map((name, index) => ({
+      classroom_id: classroomId,
+      name,
+      avatar: AVATARS[index % AVATARS.length],
+      total_points: 0,
+    }));
+
+    const { error } = await supabase.from("students").insert(rows);
+
+    if (error) {
+      setMessage(`Import failed: ${error.message}`);
+      return;
+    }
+
+    setBulkStudentNames("");
+    setMessage(`Imported ${uniqueNames.length} students.`);
+    await loadClassroomData(classroomId);
+  }
+
   async function removeStudent(id: string) {
     const { error } = await supabase.from("students").delete().eq("id", id);
     if (error) return setMessage(error.message);
@@ -952,7 +998,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           {mode === "board" ? (
             <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} giveEveryoneReward={giveEveryoneReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
           ) : mode === "setup" ? (
-            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} resetClassPoints={resetClassPoints} resetArchivedScoresForClass={resetArchivedScoresForClass} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
+            <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} bulkStudentNames={bulkStudentNames} setBulkStudentNames={setBulkStudentNames} importStudentsBulk={importStudentsBulk} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} resetClassPoints={resetClassPoints} resetArchivedScoresForClass={resetArchivedScoresForClass} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
             <ReportsMode students={students} rewards={rewards} />
           )}
@@ -1291,7 +1337,7 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
 }
 
 function SetupMode(props: {
-  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; resetClassPoints: () => void; resetArchivedScoresForClass: () => void; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
+  students: Student[]; categories: Category[]; newStudentName: string; setNewStudentName: (v: string) => void; bulkStudentNames: string; setBulkStudentNames: (v: string) => void; importStudentsBulk: () => void; newStudentAvatar: string; setNewStudentAvatar: (v: string) => void; addStudent: () => void; removeStudent: (id: string) => void; updateStudentAvatar: (studentId: string, avatar: string) => void; newCategoryName: string; setNewCategoryName: (v: string) => void; newCategoryEmoji: string; setNewCategoryEmoji: (v: string) => void; newCategoryPoints: number; setNewCategoryPoints: (v: number) => void; addCategory: () => void; removeCategory: (id: string) => void; updateCategoryEmoji: (categoryId: string, emoji: string) => void; updateCategoryPoints: (id: string, points: number) => void; activeClassroom?: Classroom; resetClassPoints: () => void; resetArchivedScoresForClass: () => void; updateClassroomSetting: (field: "theme" | "sounds_enabled" | "kiosk_mode" | "animation_level", value: string | boolean) => void; playTestSound: () => void; playSound: (type: "positive" | "negative" | "goal" | "captain" | "competition" | "test") => void; soundVolume: number; setSoundVolume: (v: number) => void; teams: Team[]; newTeamName: string; setNewTeamName: (v: string) => void; newTeamEmoji: string; setNewTeamEmoji: (v: string) => void; newTeamColor: string; setNewTeamColor: (v: string) => void; addTeam: () => void; removeTeam: (id: string) => void; assignStudentTeam: (studentId: string, teamId: string) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-2 gap-5">
@@ -1299,6 +1345,24 @@ function SetupMode(props: {
         <h2 className="text-3xl font-black text-blue-700 mb-4 flex gap-2 items-center"><Users /> Students</h2><p className="mb-3 text-sm text-slate-600">Click or type in the icon boxes to change student icons.</p>
         <div className="flex gap-2 mb-3"><input className="flex-1 rounded-2xl border p-3" placeholder="Student name" value={props.newStudentName} onChange={(e) => props.setNewStudentName(e.target.value)} /><input className="w-20 rounded-2xl border p-3 text-center text-2xl" value={props.newStudentAvatar} onChange={(e) => props.setNewStudentAvatar(e.target.value)} /><button onClick={props.addStudent} className="rounded-2xl bg-blue-500 text-white px-4 font-bold touch-button"><Plus /></button></div>
         <div className="flex flex-wrap gap-2 mb-4">{AVATARS.map((a) => <button key={a} onClick={() => props.setNewStudentAvatar(a)} className="text-2xl bg-white rounded-xl p-2 shadow touch-button">{a}</button>)}</div>
+        <div className="mb-4 rounded-2xl bg-white p-4 shadow border border-blue-100">
+          <h3 className="text-2xl font-black text-blue-700 mb-2">Import Students</h3>
+          <p className="text-sm text-slate-600 mb-3">
+            Paste names from Excel, Google Sheets, or a list. Lines, commas, and tabs all work.
+          </p>
+          <textarea
+            className="w-full min-h-32 rounded-2xl border p-3 text-lg"
+            placeholder={"Eito\nHaru\nMika\nSora"}
+            value={props.bulkStudentNames}
+            onChange={(e) => props.setBulkStudentNames(e.target.value)}
+          />
+          <button
+            onClick={props.importStudentsBulk}
+            className="mt-3 w-full rounded-2xl bg-blue-600 p-4 text-xl font-black text-white shadow touch-button"
+          >
+            Import Students
+          </button>
+        </div>
         <div className="space-y-2">{props.students.map((s) => <div key={s.id} className="flex items-center justify-between bg-white rounded-2xl p-3"><div className="flex items-center gap-3 font-bold text-xl">
               <input
                 className="w-16 rounded-xl border p-2 text-center text-2xl"
