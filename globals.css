@@ -197,3 +197,12 @@ body {
 summary::-webkit-details-marker {
   display: none;
 }
+
+/* Give Everyone explicit collapsible panel */
+.give-everyone-panel {
+  animation: giveEveryoneOpen .18s ease-out;
+}
+@keyframes giveEveryoneOpen {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

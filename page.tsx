@@ -1062,6 +1062,7 @@ function BoardMode({
   theme: any;
   kioskMode: boolean;
 }) {
+  const [showGiveEveryone, setShowGiveEveryone] = useState(false);
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
 
   return (
@@ -1164,8 +1165,18 @@ function BoardMode({
             ))}
           </div>
 
-          <details className="mt-3 rounded-xl bg-white p-3 shadow">
-            <summary className="cursor-pointer text-base font-black">Give Everyone</summary>
+          <div className="mt-3 rounded-xl bg-white p-2 shadow">
+            <button
+              type="button"
+              onClick={() => setShowGiveEveryone((open) => !open)}
+              className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left text-base font-black text-slate-800 hover:bg-slate-50 active:scale-[0.99] transition touch-button"
+              aria-expanded={showGiveEveryone}
+            >
+              <span>👥 Give Everyone</span>
+              <span className={`text-xl transition-transform duration-200 ${showGiveEveryone ? "rotate-180" : ""}`}>⌄</span>
+            </button>
+            {showGiveEveryone && (
+              <div className="pt-2 give-everyone-panel">
             <div className="grid grid-cols-1 gap-2">
               {categories.map((category) => (
                 <button
@@ -1177,7 +1188,9 @@ function BoardMode({
                 </button>
               ))}
             </div>
-          </details>
+                        </div>
+            )}
+          </div>
 
           {selectedTeamId && (
             <div className="mt-5 rounded-2xl bg-white p-4 shadow">
