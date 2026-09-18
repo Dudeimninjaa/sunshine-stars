@@ -990,7 +990,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                       Delete Class
                     </button>
                   </div>
-                </details>
+                </div>
               )}
             </>
           )}
@@ -1168,27 +1168,29 @@ function BoardMode({
           <div className="mt-3 rounded-xl bg-white p-2 shadow">
             <button
               type="button"
-              onClick={() => setShowGiveEveryone((open) => !open)}
-              className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left text-base font-black text-slate-800 hover:bg-slate-50 active:scale-[0.99] transition touch-button"
-              aria-expanded={showGiveEveryone}
+              onClick={() => setShowGiveEveryone(!showGiveEveryone)}
+              className="w-full flex items-center justify-between rounded-xl px-3 py-3 text-left font-black text-slate-800 bg-slate-50 hover:bg-slate-100 touch-button"
             >
               <span>👥 Give Everyone</span>
-              <span className={`text-xl transition-transform duration-200 ${showGiveEveryone ? "rotate-180" : ""}`}>⌄</span>
+              <span className="text-lg">{showGiveEveryone ? "▲" : "▼"}</span>
             </button>
-            {showGiveEveryone && (
-              <div className="pt-2 give-everyone-panel">
-            <div className="grid grid-cols-1 gap-2">
-              {categories.map((category) => (
-                <button
-                  key={`everyone-${category.id}`}
-                  onClick={() => giveEveryoneReward(category)}
-                  className={`rounded-2xl p-3 font-black text-left ${category.points < 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
-                >
-                  Everyone {category.points > 0 ? "+" : ""}{category.points}: {category.name}
-                </button>
-              ))}
+
+            <div className={showGiveEveryone ? "mt-2 block" : "hidden"}>
+              <div className="grid grid-cols-1 gap-2">
+                {categories.map((category) => (
+                  <button
+                    key={`everyone-${category.id}`}
+                    onClick={() => giveEveryoneReward(category)}
+                    className={`rounded-xl p-3 font-black text-left ${
+                      category.points < 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    Everyone {category.points > 0 ? "+" : ""}{category.points}: {category.name}
+                  </button>
+                ))}
+              </div>
             </div>
-                        </div>
+          </div>
             )}
           </div>
 
