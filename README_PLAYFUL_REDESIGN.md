@@ -1,0 +1,1 @@
+Sunshine Stars Colorful & Playful edition. UI-only board redesign based on game-mode build. Student, reward, team, captain, reports, setup and Supabase logic preserved. Use existing .env.local locally. Layout uses independent board/panel scrolling when needed. No SQL changes. Test npm run build and smartboard resolution before production.

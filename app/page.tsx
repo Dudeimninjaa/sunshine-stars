@@ -859,7 +859,7 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
   const progress = goal ? Math.min(100, Math.round((goal.current_points / goal.target_points) * 100)) : 0;
 
   return (
-    <main className={`min-h-screen p-3 md:p-5 bg-gradient-to-br ${theme.bg}`}>
+    <main className={`min-h-screen p-2 md:p-3 bg-gradient-to-br ${theme.bg}`}>
       {centerAnimation && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center pointer-events-none">
           <div
@@ -921,12 +921,12 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
         </div>
       )}
       {!kioskMode && (
-        <header className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <div><h1 className="text-4xl md:text-6xl font-black text-white drop-shadow-lg">{theme.emoji} Sunshine Stars</h1><p className="text-white/80 text-lg">Interactive board mode for teachers</p></div>
+        <header className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div><h1 className="text-3xl md:text-4xl font-black text-white drop-shadow-lg">{theme.emoji} Sunshine Stars</h1><p className="text-white/80 text-sm md:text-base">Interactive board mode for teachers</p></div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setMode("board")} className={`px-5 py-4 rounded-2xl font-bold flex gap-2 items-center touch-button ${mode === "board" ? `${theme.accent} text-white` : "bg-white"}`}><MonitorPlay /> Board</button>
-            <button onClick={() => setMode("setup")} className={`px-5 py-4 rounded-2xl font-bold flex gap-2 items-center touch-button ${mode === "setup" ? "bg-blue-500 text-white" : "bg-white"}`}><Settings /> Setup</button>
-            <button onClick={() => setMode("reports")} className={`px-5 py-4 rounded-2xl font-bold flex gap-2 items-center touch-button ${mode === "reports" ? "bg-emerald-500 text-white" : "bg-white"}`}><BarChart3 /> Reports</button>
+            <button onClick={() => setMode("board")} className={`px-3 py-2 rounded-xl font-bold flex gap-2 items-center touch-button ${mode === "board" ? `${theme.accent} text-white` : "bg-white"}`}><MonitorPlay /> Board</button>
+            <button onClick={() => setMode("setup")} className={`px-3 py-2 rounded-xl font-bold flex gap-2 items-center touch-button ${mode === "setup" ? "bg-blue-500 text-white" : "bg-white"}`}><Settings /> Setup</button>
+            <button onClick={() => setMode("reports")} className={`px-3 py-2 rounded-xl font-bold flex gap-2 items-center touch-button ${mode === "reports" ? "bg-emerald-500 text-white" : "bg-white"}`}><BarChart3 /> Reports</button>
             <button onClick={() => updateClassroomSetting("kiosk_mode", true)} className="px-5 py-4 rounded-2xl font-bold bg-white flex gap-2 items-center touch-button"><Maximize /> Kiosk</button>
             <button onClick={signOut} className="px-5 py-4 rounded-2xl font-bold bg-white flex gap-2 items-center touch-button"><LogOut /> Logout</button>
           </div>
@@ -935,11 +935,11 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
       {kioskMode && <button onClick={() => updateClassroomSetting("kiosk_mode", false)} className="fixed top-4 right-4 z-50 rounded-2xl bg-white/90 px-4 py-3 font-bold shadow-xl flex gap-2 items-center touch-button"><Minimize /> Exit Kiosk</button>}
 
       <section className="grid grid-cols-1 gap-5">
-        <div className={`rounded-[2rem] ${theme.panel} shadow-2xl p-4 md:p-5 border border-white`}>
+        <div className={`rounded-[2rem] ${theme.panel} shadow-2xl p-3 border border-white`}>
           {!kioskMode && (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                <select className="rounded-2xl border p-4 text-xl font-bold bg-white" value={classroomId} onChange={(e) => setClassroomId(e.target.value)}>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <select className="rounded-xl border px-3 py-2 text-base font-bold bg-white" value={classroomId} onChange={(e) => setClassroomId(e.target.value)}>
                   {classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <div className="flex flex-wrap gap-2">
@@ -949,8 +949,8 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
               </div>
 
               
-              {activeClassroom && (
-                <div className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 p-4">
+              {mode === "setup" && activeClassroom && (
+                <div className="mb-3 rounded-xl bg-amber-50 border border-amber-200 p-4">
                   <div className="text-lg font-black text-amber-800 mb-2">Reset Tools</div>
                   <p className="text-sm text-amber-800 mb-3">
                     Use these when starting a new day, week, or competition test.
@@ -967,8 +967,8 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
                 </div>
               )}
 
-{activeClassroom && (
-                <details className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-4">
+{mode === "setup" && activeClassroom && (
+                <details className="mb-3 rounded-xl bg-red-50 border border-red-200 p-4">
                   <summary className="cursor-pointer text-lg font-black text-red-700">Delete Classroom</summary>
                   <p className="mt-3 text-sm text-red-700">
                     This permanently deletes the class, students, rewards, categories, teams, goals, and captain history.
@@ -996,7 +996,20 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           )}
 
           {mode === "board" ? (
-            <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} giveEveryoneReward={giveEveryoneReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
+            <>
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={resetClassPoints}
+                  disabled={!activeClassroom || !goal}
+                  title="Reset all student points and class goal progress for this class"
+                  className="flex items-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-100 px-4 py-2 text-sm font-black text-amber-900 shadow-sm transition hover:bg-amber-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 touch-button"
+                >
+                  ↺ Reset Points
+                </button>
+              </div>
+              <BoardMode students={students} categories={categories} selectedStudentId={selectedStudentId} setSelectedStudentId={setSelectedStudentId} popStudentId={popStudentId} negativePopStudentId={negativePopStudentId} giveReward={giveReward} giveEveryoneReward={giveEveryoneReward} quickTakeAwayPoint={quickTakeAwayPoint} teams={teams} selectedTeamId={selectedTeamId} setSelectedTeamId={setSelectedTeamId} giveTeamReward={giveTeamReward} pickClassCaptains={pickClassCaptains} todaysCaptainIds={todaysCaptainIds} theme={theme} kioskMode={kioskMode} />
+            </>
           ) : mode === "setup" ? (
             <SetupMode students={students} categories={categories} newStudentName={newStudentName} setNewStudentName={setNewStudentName} bulkStudentNames={bulkStudentNames} setBulkStudentNames={setBulkStudentNames} importStudentsBulk={importStudentsBulk} newStudentAvatar={newStudentAvatar} setNewStudentAvatar={setNewStudentAvatar} addStudent={addStudent} removeStudent={removeStudent} updateStudentAvatar={updateStudentAvatar} newCategoryName={newCategoryName} setNewCategoryName={setNewCategoryName} newCategoryEmoji={newCategoryEmoji} setNewCategoryEmoji={setNewCategoryEmoji} newCategoryPoints={newCategoryPoints} setNewCategoryPoints={setNewCategoryPoints} addCategory={addCategory} removeCategory={removeCategory} updateCategoryEmoji={updateCategoryEmoji} updateCategoryPoints={updateCategoryPoints} activeClassroom={activeClassroom} resetClassPoints={resetClassPoints} resetArchivedScoresForClass={resetArchivedScoresForClass} updateClassroomSetting={updateClassroomSetting} playTestSound={() => playSound("test")} playSound={playSound} soundVolume={soundVolume} setSoundVolume={setSoundVolume} teams={teams} newTeamName={newTeamName} setNewTeamName={setNewTeamName} newTeamEmoji={newTeamEmoji} setNewTeamEmoji={setNewTeamEmoji} newTeamColor={newTeamColor} setNewTeamColor={setNewTeamColor} addTeam={addTeam} removeTeam={removeTeam} assignStudentTeam={assignStudentTeam} />
           ) : (
@@ -1004,14 +1017,14 @@ function playSound(type: "positive" | "negative" | "goal" | "captain" | "competi
           )}
         </div>
 
-        <aside className={`rounded-[2rem] ${theme.panel} shadow-2xl p-5 border border-white`}>
+        <aside className={`rounded-[1.5rem] ${theme.panel} shadow-2xl p-3 border border-white`}>
           <h2 className={`text-3xl font-black ${theme.accentText} mb-3`}>Class Goal</h2>
           {goal ? (
             <>
               {!kioskMode && <input className="w-full rounded-2xl border p-3 mb-3 font-bold text-lg" value={goal.name} onChange={(e) => updateGoal("name", e.target.value)} />}
               {!kioskMode && <input className="w-full rounded-2xl border p-3 mb-3" value={goal.reward_name} onChange={(e) => updateGoal("reward_name", e.target.value)} />}
-              <div className="text-center my-5"><div className="text-7xl animate-pop">{theme.emoji}</div><div className="text-5xl font-black">{goal.current_points} / {goal.target_points}</div><div className="text-slate-500 text-xl">Reward: {goal.reward_name}</div></div>
-              <div className="w-full bg-orange-100 rounded-full h-10 overflow-hidden shadow-inner"><div className="bg-gradient-to-r from-yellow-300 to-orange-500 h-full rounded-full transition-all duration-700" style={{ width: `${progress}%` }} /></div>
+              <div className="text-center my-5"><div className="text-5xl animate-pop">{theme.emoji}</div><div className="text-5xl font-black">{goal.current_points} / {goal.target_points}</div><div className="text-slate-500 text-xl">Reward: {goal.reward_name}</div></div>
+              <div className="w-full bg-orange-100 rounded-full h-5 overflow-hidden shadow-inner"><div className="bg-gradient-to-r from-yellow-300 to-orange-500 h-full rounded-full transition-all duration-700" style={{ width: `${progress}%` }} /></div>
               {!kioskMode && <><label className="block mt-4 font-bold">Target points</label><input type="number" className="w-full rounded-2xl border p-3" value={goal.target_points} onChange={(e) => updateGoal("target_points", Number(e.target.value))} /><button onClick={() => updateGoal("current_points", 0)} className="w-full mt-3 rounded-2xl bg-slate-900 text-white p-4 font-bold touch-button">Reset Goal Progress</button></>}
             </>
           ) : <p>No goal yet.</p>}
@@ -1062,186 +1075,63 @@ function BoardMode({
   theme: any;
   kioskMode: boolean;
 }) {
+  const [showGiveEveryone, setShowGiveEveryone] = useState(false);
+  const [showTeamRewards, setShowTeamRewards] = useState(false);
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
 
   return (
-    <div className="space-y-5">
-      {kioskMode && (
-        <div className="text-center">
-          <div className="text-5xl md:text-7xl font-black text-slate-800">{theme.emoji} Board Mode</div>
-          <p className="text-xl text-slate-600">Tap a student, then tap a reward on the side.</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5 items-start">
-        <section className="board-scroll">
-          <div className={`grid grid-cols-2 md:grid-cols-3 ${kioskMode ? "2xl:grid-cols-4" : "2xl:grid-cols-5"} gap-4`}>
-            {students.map((student) => (
-              <button
-                key={student.id}
-                onClick={() => setSelectedStudentId(student.id)}
-                className={`relative rounded-[2rem] p-5 md:p-6 min-h-44 text-center shadow-xl border-4 transition-all touch-button ${
-                  selectedStudentId === student.id
-                    ? "bg-yellow-100 border-yellow-400 scale-[1.04]"
-                    : "bg-white border-white hover:scale-[1.02]"
-                } ${popStudentId === student.id || negativePopStudentId === student.id ? "animate-glow" : ""}`}
-              >
-                <div className="text-6xl md:text-7xl mb-2">{student.avatar}</div>
-                <div className="text-2xl md:text-3xl font-black text-slate-800">
-                  {todaysCaptainIds.includes(student.id) ? "👑 " : ""}{student.name}
-                </div>
-                {student.team_id && (
-                  <div
-                    className="mt-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs md:text-sm font-black text-white"
-                    style={{ backgroundColor: teams.find((t) => t.id === student.team_id)?.color || "#64748b" }}
-                  >
-                    {teams.find((t) => t.id === student.team_id)?.emoji} {teams.find((t) => t.id === student.team_id)?.name}
-                  </div>
-                )}
-                <div className="text-2xl md:text-3xl font-bold text-orange-500 mt-2">
-                  <Star className="inline" /> {student.total_points}
-                </div>
-                {(() => {
-                  const weekly = getWeeklyStickerInfo(student);
-                  const width = Math.min(100, Math.round((weekly.progress / WEEKLY_STICKER_TARGET) * 100));
-                  return (
-                    <div className="mt-3 rounded-2xl bg-slate-100 p-2">
-                      <div className="flex items-center justify-between text-xs md:text-sm font-black text-slate-600">
-                        <span>Sticker Goal</span>
-                        <span>{weekly.progress}/{WEEKLY_STICKER_TARGET}</span>
-                      </div>
-                      <div className="mt-1 h-3 rounded-full bg-white overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-yellow-300 to-orange-500 transition-all duration-500" style={{ width: `${width}%` }} />
-                      </div>
-                      <div className="mt-1 text-xs md:text-sm font-black text-pink-600">
-                        ⭐ Stickers: {weekly.stickers}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <aside className={`reward-side-panel rounded-[2rem] ${theme.soft} p-5 shadow-2xl border border-white`}>
-          <h2 className={`text-3xl font-black mb-2 ${theme.accentText}`}>Rewards</h2>
-          {selectedStudent ? (
-            <div className="mb-4 rounded-2xl bg-white p-4 shadow">
-              <div className="text-sm font-bold text-slate-500">Selected Student</div>
-              <div className="text-3xl font-black">{selectedStudent.avatar} {selectedStudent.name}</div>
-            </div>
-          ) : (
-            <p className="mb-4 rounded-2xl bg-white p-4 text-lg font-bold text-slate-600 shadow">
-              Select a student first.
-            </p>
-          )}
-
-          <div className="grid grid-cols-1 gap-3">
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                disabled={!selectedStudentId}
-                onClick={() => giveReward(category)}
-                className={`rounded-[1.5rem] ${
-                  category.points < 0
-                    ? "bg-red-50 text-red-700 border-2 border-red-200"
-                    : "bg-white"
-                } p-4 text-left text-xl font-black shadow-lg hover:scale-[1.03] active:scale-95 disabled:opacity-40 transition-all touch-button`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-3">
-                    <span className="text-4xl">{category.emoji}</span>
-                    <span>{category.name}</span>
-                  </span>
-                  <span className={`rounded-full px-3 py-1 text-base ${
-                    category.points < 0 ? "bg-red-200 text-red-900" : "bg-yellow-100 text-orange-700"
-                  }`}>
-                    {category.points > 0 ? `+${category.points}` : category.points}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-5 rounded-2xl bg-white p-4 shadow">
-            <h3 className="text-xl font-black mb-2">Give Everyone</h3>
-            <div className="grid grid-cols-1 gap-2">
-              {categories.map((category) => (
-                <button
-                  key={`everyone-${category.id}`}
-                  onClick={() => giveEveryoneReward(category)}
-                  className={`rounded-2xl p-3 font-black text-left ${category.points < 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
-                >
-                  Everyone {category.points > 0 ? "+" : ""}{category.points}: {category.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {selectedTeamId && (
-            <div className="mt-5 rounded-2xl bg-white p-4 shadow">
-              <h3 className="text-xl font-black mb-2">Team Reward</h3>
-              <p className="text-slate-600 mb-3">
-                Team: <b>{teams.find((t) => t.id === selectedTeamId)?.emoji} {teams.find((t) => t.id === selectedTeamId)?.name}</b>
-              </p>
-              <div className="grid grid-cols-1 gap-2">
-                {categories.map((category) => (
-                  <button
-                    key={`team-${category.id}`}
-                    onClick={() => giveTeamReward(category)}
-                    className={`rounded-2xl p-3 font-black text-left ${
-                      category.points < 0 ? "bg-red-100 text-red-700" : "bg-yellow-100 text-orange-700"
-                    }`}
-                  >
-                    Team {category.points > 0 ? "+" : ""}{category.points}: {category.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </aside>
+    <div className="playful-board space-y-2">
+      <div className="playful-topbar flex flex-wrap items-center justify-between gap-2 rounded-2xl border-2 border-white/70 bg-gradient-to-r from-sky-400 via-cyan-300 to-violet-300 px-4 py-2 text-indigo-950 shadow-md">
+        <div className="flex items-center gap-3"><span className="text-3xl">🌈</span><div><div className="text-xl font-black tracking-tight">SUNSHINE STARS</div><div className="text-xs font-semibold text-indigo-200">Choose a friend · Celebrate kind choices · Shine together!</div></div></div>
+        <div className="flex items-center gap-2"><span className="rounded-full bg-white/70 px-3 py-1 text-sm font-extrabold">👫 {students.length} Friends</span><span className="rounded-full bg-amber-400 px-3 py-2 text-sm font-black text-slate-900">⭐ {students.reduce((n, s) => n + s.total_points, 0)} Stars</span></div>
       </div>
-
-      <section className="grid xl:grid-cols-3 gap-4">
-        <div className="ui-polish-card rounded-[2rem] bg-white p-5 shadow-xl">
-          <h2 className="text-2xl font-black mb-3 flex items-center gap-2"><Crown /> Captains</h2>
-          <button
-            onClick={pickClassCaptains}
-            className="w-full rounded-2xl bg-yellow-400 p-4 text-xl font-black text-orange-950 shadow hover:scale-[1.02] active:scale-95 transition-all touch-button"
-          >
-            <Shuffle className="inline mr-2" /> Pick 2 Captains
-          </button>
-          <p className="text-xs text-slate-500 mt-2">No-repeat mode is on.</p>
-        </div>
-
-        <div className="ui-polish-card rounded-[2rem] bg-white p-5 shadow-xl xl:col-span-2">
-          <h2 className="text-2xl font-black mb-3 flex items-center gap-2"><Trophy /> Team Standings</h2>
-          <div className="grid md:grid-cols-2 gap-2">
-            {teams.map((team) => {
-              const total = students.filter((s) => s.team_id === team.id).reduce((sum, s) => sum + s.total_points, 0);
+      <div className="playful-columns grid grid-cols-1 gap-2 xl:grid-cols-[minmax(0,1fr)_294px]">
+        <section className="playful-students min-w-0 overflow-y-auto rounded-2xl border-2 border-sky-100 bg-white/80 p-2 shadow-sm">
+          <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-black text-indigo-950">🌟 Our Superstars</h2><span className="text-xs font-bold text-indigo-500">Tap a friend to give a star</span></div>
+          <div className="playful-student-grid grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+            {students.map((student) => {
+              const weekly = getWeeklyStickerInfo(student);
+              const progress = Math.min(100, Math.round(weekly.progress / WEEKLY_STICKER_TARGET * 100));
+              const team = teams.find((t) => t.id === student.team_id);
+              const active = selectedStudentId === student.id;
               return (
-                <button
-                  key={team.id}
-                  onClick={() => setSelectedTeamId(team.id)}
-                  className={`rounded-2xl p-3 text-left font-black shadow flex justify-between items-center ${
-                    selectedTeamId === team.id ? "ring-4 ring-yellow-300" : ""
-                  }`}
-                  style={{ borderLeft: `12px solid ${team.color}` }}
-                >
-                  <span>{team.emoji} {team.name}</span>
-                  <span>{total} pts</span>
+                <button key={student.id} type="button" onClick={() => setSelectedStudentId(student.id)} aria-pressed={active}
+                  className={`playful-student relative min-w-0 rounded-2xl border-2 px-2 py-2 text-center shadow-sm transition-all active:scale-95 ${active ? 'border-amber-400 bg-yellow-50 ring-4 ring-amber-200' : 'border-sky-100 bg-gradient-to-b from-white to-sky-50 hover:border-pink-300'} ${popStudentId === student.id || negativePopStudentId === student.id ? 'animate-glow' : ''}`}>
+                  {todaysCaptainIds.includes(student.id) && <span className="absolute right-2 top-1 text-xl" title="Class Captain">👑</span>}
+                  <div className="text-4xl leading-none">{student.avatar}</div>
+                  <div className="mt-1 truncate text-sm font-black text-slate-800" title={student.name}>{student.name}</div>
+                  <div className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-sm font-black text-amber-800">⭐ {student.total_points}</div>
+                  {team && <div className="mt-1 truncate text-[11px] font-extrabold" style={{color:team.color}}>{team.emoji} {team.name}</div>}
+                  <div className="mt-1 flex items-center justify-between text-[11px] font-extrabold text-slate-500"><span>🎟️ {weekly.stickers}</span><span>{weekly.progress}/{WEEKLY_STICKER_TARGET}</span></div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-fuchsia-500 transition-all" style={{width:`${progress}%`}} /></div>
                 </button>
               );
             })}
-            {!teams.length && <p className="text-slate-500">Create teams in Setup.</p>}
           </div>
-        </div>
-      </section>
+          {!students.length && <div className="p-8 text-center font-bold text-indigo-700">Add students in Setup to start your quest!</div>}
+        </section>
+        <aside className="playful-rewards min-w-0 overflow-y-auto rounded-2xl border-2 border-pink-100 bg-white/95 p-2 shadow-md">
+          <div className="mb-2 rounded-xl bg-gradient-to-r from-pink-300 via-rose-200 to-amber-200 p-2 text-indigo-950"><h2 className="text-xl font-black">🎁 Give a Star</h2><p className="mt-1 truncate text-sm font-semibold">{selectedStudent ? `${selectedStudent.avatar} ${selectedStudent.name}` : '👆 Choose a friend first'}</p></div>
+          <div className="grid grid-cols-2 gap-2">
+            {categories.map(category => <button key={category.id} type="button" disabled={!selectedStudentId} onClick={() => giveReward(category)}
+              className={`min-h-[66px] rounded-xl border-2 p-2 text-center font-black shadow-sm transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-40 ${category.points < 0 ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-sky-100 bg-gradient-to-b from-sky-50 to-violet-50 text-indigo-900'}`}>
+              <div className="text-2xl">{category.emoji}</div><div className="mt-1 break-words text-xs leading-tight">{category.name}</div><div className={`mt-1 text-xs ${category.points < 0 ? 'text-rose-600' : 'text-amber-600'}`}>{category.points > 0 ? '+' : ''}{category.points} ⭐</div>
+            </button>)}
+          </div>
+          <div className="mt-3 rounded-2xl border border-indigo-100 bg-slate-50 p-2">
+            <button type="button" aria-expanded={showGiveEveryone} onClick={() => setShowGiveEveryone(v => !v)} className="flex min-h-[44px] w-full items-center justify-between rounded-xl bg-white px-3 text-sm font-black text-indigo-900 shadow-sm"><span>👥 Give Everyone</span><span>{showGiveEveryone ? '▲' : '▼'}</span></button>
+            {showGiveEveryone && <div className="mt-2 grid grid-cols-2 gap-2">{categories.map(category => <button key={category.id} type="button" onClick={() => giveEveryoneReward(category)} className={`rounded-xl p-2 text-xs font-black ${category.points < 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>{category.emoji} {category.name}<div>{category.points > 0 ? '+' : ''}{category.points} Everyone</div></button>)}</div>}
+          </div>
+          {selectedTeamId && <div className="mt-2 rounded-2xl bg-indigo-50 p-2"><button type="button" onClick={() => setShowTeamRewards(v => !v)} className="flex w-full items-center justify-between rounded-xl bg-white p-3 text-sm font-black text-indigo-900"><span>🤝 Team Rewards</span><span>{showTeamRewards ? '▲' : '▼'}</span></button>{showTeamRewards && <div className="mt-2 grid grid-cols-2 gap-2">{categories.map(category => <button key={category.id} type="button" onClick={() => giveTeamReward(category)} className="rounded-xl bg-indigo-100 p-2 text-xs font-black text-indigo-900">{category.emoji} {category.name}<div>{category.points > 0 ? '+' : ''}{category.points} Team</div></button>)}</div>}</div>}
+        </aside>
+      </div>
+      <div className="playful-footer grid gap-2 lg:grid-cols-[200px_minmax(0,1fr)]">
+        <button type="button" onClick={pickClassCaptains} className="rounded-2xl bg-gradient-to-r from-yellow-300 to-orange-300 px-4 py-3 text-base font-black text-amber-950 shadow-md active:scale-95">👑 Pick 2 Captains</button>
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white p-2 shadow-md"><span className="px-2 text-sm font-black text-indigo-900">🌈 Teams</span>{teams.map(team => <button key={team.id} type="button" onClick={() => setSelectedTeamId(team.id === selectedTeamId ? '' : team.id)} className={`rounded-full border-2 px-3 py-2 text-xs font-black ${selectedTeamId === team.id ? 'bg-amber-100 ring-2 ring-amber-300' : 'bg-white'}`} style={{borderColor:team.color}}>{team.emoji} {team.name} · {students.filter(s => s.team_id === team.id).reduce((n,s) => n+s.total_points,0)} ⭐</button>)}{!teams.length && <span className="text-xs text-slate-400">Set up teams to show rankings</span>}</div>
+      </div>
     </div>
   );
 }
-
 
 function ReportsMode({ students, rewards }: { students: Student[]; rewards: RewardLog[] }) {
   const today = new Date();
@@ -1289,7 +1179,7 @@ function ReportsMode({ students, rewards }: { students: Student[]; rewards: Rewa
   const summary = `This week the class earned ${totalWeek} points. The most common reward category was ${topCategory}. The top weekly participant was ${topStudent}.`;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="grid md:grid-cols-3 gap-4">
         <div className="rounded-[2rem] bg-white p-5 shadow"><div className="text-slate-500 font-bold">Today</div><div className="text-5xl font-black text-orange-500">{totalToday}</div><div className="text-slate-500">points</div></div>
         <div className="rounded-[2rem] bg-white p-5 shadow"><div className="text-slate-500 font-bold">Last 7 Days</div><div className="text-5xl font-black text-emerald-500">{totalWeek}</div><div className="text-slate-500">points</div></div>

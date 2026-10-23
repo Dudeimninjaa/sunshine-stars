@@ -1,0 +1,1 @@
+Adds a Reset Points button to Board mode, including Kiosk mode. Uses existing resetClassPoints function and its confirmation dialog; resets current classroom student totals and class goal only. No database changes.
